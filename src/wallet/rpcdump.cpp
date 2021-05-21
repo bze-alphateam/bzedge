@@ -774,8 +774,13 @@ UniValue z_importkey(const UniValue& params, bool fHelp)
     pwalletMain->nTimeFirstKey = 1; // 0 would be considered 'no value'
     
     // We want to scan for transactions and notes
-    if (fRescan) {
+    if (fRescan)
+    {
+#ifdef BZE_WITNESS
+        pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true);
+#else
         pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true);
+#endif // BZE_WITNESS 
     }
 
     return result;
@@ -870,8 +875,13 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp)
     }
 
     // We want to scan for transactions and notes
-    if (fRescan) {
+    if (fRescan)
+    {
+#ifdef BZE_WITNESS
+        pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true);
+#else
         pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true);
+#endif // BZE_WITNESS 
     }
 
     return result;

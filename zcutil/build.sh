@@ -77,6 +77,14 @@ case "$CONFIGURE_FLAGS" in
     DEBUG=
 ;;esac
 
+# Allow user to build witness rework version of the bzedge:
+#   BZE_WITNESS=1
+BZE_WITNESS_CPPFLAGS=
+if [ "${BZE_WITNESS-0}" = "1" ]
+then
+    BZE_WITNESS_CPPFLAGS="CPPFLAGS=-DBZE_WITNESS"
+fi
+
 HOST="$HOST" BUILD="$BUILD" "$MAKE" "$@" -C ./depends/ DEBUG="$DEBUG"
 
 if [ "${BUILD_STAGE:-all}" = "depends" ]
@@ -85,5 +93,5 @@ then
 fi
 
 ./autogen.sh
-CONFIG_SITE="$PWD/depends/$HOST/share/config.site" ./configure $CONFIGURE_FLAGS
+CONFIG_SITE="$PWD/depends/$HOST/share/config.site" ./configure $CONFIGURE_FLAGS $BZE_WITNESS_CPPFLAGS
 "$MAKE" "$@"

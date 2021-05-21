@@ -49,6 +49,13 @@ extern unsigned int nTxConfirmTarget;
 extern bool bSpendZeroConfChange;
 extern bool fSendFreeTransactions;
 extern bool fPayAtLeastCustomFee;
+#ifdef BZE_WITNESS
+extern bool fTxDeleteEnabled;
+extern bool fTxConflictDeleteEnabled;
+extern int fDeleteInterval;
+extern unsigned int fDeleteTransactionsAfterNBlocks;
+extern unsigned int fKeepLastNTransactions;
+#endif // BZE_WITNESS
 
 static const unsigned int DEFAULT_KEYPOOL_SIZE = 100;
 //! -paytxfee default
@@ -73,6 +80,20 @@ static const unsigned int WITNESS_CACHE_SIZE = MAX_REORG_LENGTH + 1;
 
 //! Size of HD seed in bytes
 static const size_t HD_WALLET_SEED_LENGTH = 32;
+
+#ifdef BZE_WITNESS
+//Default Transaction Rentention N-BLOCKS
+static const int DEFAULT_TX_DELETE_INTERVAL = 1000;
+
+//Default Transaction Rentention N-BLOCKS
+static const unsigned int DEFAULT_TX_RETENTION_BLOCKS = 10000;
+
+//Default Retenion Last N-Transactions
+static const unsigned int DEFAULT_TX_RETENTION_LASTTX = 200;
+
+//Amount of transactions to delete per run while syncing
+static const int MAX_DELETE_TX_SIZE = 50000;
+#endif // BZE_WITNESS
 
 extern const char * DEFAULT_WALLET_DAT;
 
@@ -255,11 +276,22 @@ public:
      */
     int witnessHeight;
 
+#ifdef BZE_WITNESS
+    //In Memory Only
+    bool witnessRootValidated;
+
+    SproutNoteData() : address(), nullifier(), witnessHeight {-1}, witnessRootValidated {false} { }
+    SproutNoteData(libzcash::SproutPaymentAddress a) :
+            address {a}, nullifier(), witnessHeight {-1}, witnessRootValidated {false} { }
+    SproutNoteData(libzcash::SproutPaymentAddress a, uint256 n) :
+            address {a}, nullifier {n}, witnessHeight {-1}, witnessRootValidated {false} { }
+#else
     SproutNoteData() : address(), nullifier(), witnessHeight {-1} { }
     SproutNoteData(libzcash::SproutPaymentAddress a) :
             address {a}, nullifier(), witnessHeight {-1} { }
     SproutNoteData(libzcash::SproutPaymentAddress a, uint256 n) :
             address {a}, nullifier {n}, witnessHeight {-1} { }
+#endif // BZE_WITNESS
 
     ADD_SERIALIZE_METHODS;
 
@@ -292,14 +324,25 @@ public:
      * We initialize the height to -1 for the same reason as we do in SproutNoteData.
      * See the comment in that class for a full description.
      */
+#ifdef BZE_WITNESS
+    SaplingNoteData() : witnessHeight {-1}, nullifier(), witnessRootValidated {false} { }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, witnessHeight {-1}, nullifier(), witnessRootValidated {false} { }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, witnessHeight {-1}, nullifier(n), witnessRootValidated {false} { }
+#else
     SaplingNoteData() : witnessHeight {-1}, nullifier() { }
     SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, witnessHeight {-1}, nullifier() { }
     SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, witnessHeight {-1}, nullifier(n) { }
+#endif // BZE_WITNESS
 
     std::list<SaplingWitness> witnesses;
     int witnessHeight;
     libzcash::SaplingIncomingViewingKey ivk;
     std::optional<uint256> nullifier;
+
+#ifdef BZE_WITNESS
+    //In Memory Only
+    bool witnessRootValidated;
+#endif // BZE_WITNESS
 
     ADD_SERIALIZE_METHODS;
 
@@ -642,6 +685,10 @@ public:
     bool IsTrusted() const;
 
     bool WriteToDisk(CWalletDB *pwalletdb);
+#ifdef BZE_WITNESS    
+    bool WriteArcSproutOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, JSOutPoint op);
+    bool WriteArcSaplingOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, SaplingOutPoint op);
+#endif // BZE_WITNESS
 
     int64_t GetTxTime() const;
     int GetRequestCount() const;
@@ -849,6 +896,11 @@ private:
     std::vector<CTransaction> pendingSaplingMigrationTxs;
     AsyncRPCOperationId saplingMigrationOperationId;
 
+#ifdef BZE_WITNESS
+    std::vector<CTransaction> pendingSaplingConsolidationTxs;
+    AsyncRPCOperationId saplingConsolidationOperationId;
+#endif // BZE_WITNESS
+
     void AddToTransparentSpends(const COutPoint& outpoint, const uint256& wtxid);
     void AddToSproutSpends(const uint256& nullifier, const uint256& wtxid);
     void AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid);
@@ -869,10 +921,33 @@ public:
      */
     int64_t nWitnessCacheSize;
     bool fSaplingMigrationEnabled = false;
+#ifdef BZE_WITNESS
+    bool fSaplingConsolidationEnabled = false;
+#endif // BZE_WITNESS
 
     void ClearNoteWitnessCache();
 
+#ifdef BZE_WITNESS
+    int64_t NullifierCount();
+    std::set<uint256> GetNullifiers();
+
+    std::map<uint256, ArchiveTxPoint> mapArcTxs;
+    void AddToArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt);
+
+    std::map<uint256, JSOutPoint> mapArcJSOutPoints;
+    void AddToArcJSOutPoints(const uint256& nullifier, const JSOutPoint& op);
+
+    std::map<uint256, SaplingOutPoint> mapArcSaplingOutPoints;
+    void AddToArcSaplingOutPoints(const uint256& nullifier, const SaplingOutPoint& op);
+#endif // BZE_WITNESS
+
 protected:
+#ifdef BZE_WITNESS
+    int SproutWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight);
+    int SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight);
+    int VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly);
+    void BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly);    
+#else
     /**
      * pindex is the new tip being connected.
      */
@@ -880,6 +955,8 @@ protected:
                                 const CBlock* pblock,
                                 SproutMerkleTree& sproutTree,
                                 SaplingMerkleTree& saplingTree);
+#endif // BZE_WITNESS
+
     /**
      * pindex is the old tip being disconnected.
      */
@@ -952,6 +1029,13 @@ public:
      *      strWalletFile (immutable after instantiation)
      */
     mutable CCriticalSection cs_wallet;
+    
+    // MIODRAG
+    /*
+     * A lock for reporting rescan progress
+    */
+    mutable CCriticalSection cs_rescan;
+    std::optional<double> dRescanProgress = std::nullopt;
 
     bool fFileBacked;
     std::string strWalletFile;
@@ -1098,6 +1182,12 @@ public:
     bool IsSpent(const uint256& hash, unsigned int n) const;
     bool IsSproutSpent(const uint256& nullifier) const;
     bool IsSaplingSpent(const uint256& nullifier) const;
+#ifdef BZE_WITNESS
+    unsigned int GetSpendDepth(const uint256& hash, unsigned int n) const;
+    unsigned int GetSproutSpendDepth(const uint256& nullifier) const;
+    unsigned int GetSaplingSpendDepth(const uint256& nullifier) const;
+#endif // BZE_WITNESS
+
 
     bool IsLockedCoin(uint256 hash, unsigned int n) const;
     void LockCoin(COutPoint& output);
@@ -1193,7 +1283,11 @@ public:
       * Sapling ZKeys
       */
     //! Generates new Sapling key
+#ifdef BZE_WITNESS
+    libzcash::SaplingPaymentAddress GenerateNewSaplingZKey(bool resetCounter = false);
+#else
     libzcash::SaplingPaymentAddress GenerateNewSaplingZKey();
+#endif // BZE_WITNESS
     //! Adds Sapling spending key to the store, and saves it to disk
     bool AddSaplingZKey(const libzcash::SaplingExtendedSpendingKey &key);
     //! Add Sapling full viewing key to the wallet.
@@ -1254,8 +1348,15 @@ public:
     void MarkDirty();
     bool UpdateNullifierNoteMap();
     void UpdateNullifierNoteMapWithTx(const CWalletTx& wtx);
+#ifdef BZE_WITNESS
+    void UpdateSproutNullifierNoteMapWithTx(CWalletTx& wtx);
+#endif // BZE_WITNESS
     void UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx);
+#ifdef BZE_WITNESS
+    void UpdateNullifierNoteMapForBlock(const CBlock* pblock);
+#else
     void UpdateSaplingNullifierNoteMapForBlock(const CBlock* pblock);
+#endif // BZE_WITNESS    
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb);
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock, const int nHeight);
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const int nHeight, bool fUpdate);
@@ -1264,7 +1365,14 @@ public:
          std::vector<uint256> commitments,
          std::vector<std::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
-    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
+#ifdef BZE_WITNESS
+    void ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, int64_t &maxOrderPos);
+    void UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, bool resetOrder);
+    void DeleteTransactions(std::vector<uint256> &removeTxs);
+    void DeleteWalletTransactions(const CBlockIndex* pindex);
+    bool initalizeArcTx();
+#endif // BZE_WITNESS
+    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false);
     void ReacceptWalletTransactions();
     void ResendWalletTransactions(int64_t nBestBlockTime);
     std::vector<uint256> ResendWalletTransactionsBefore(int64_t nTime);
@@ -1376,6 +1484,10 @@ public:
         std::optional<std::pair<SproutMerkleTree, SaplingMerkleTree>> added);
     void RunSaplingMigration(int blockHeight);
     void AddPendingSaplingMigrationTx(const CTransaction& tx);
+#ifdef BZE_WITNESS
+    void RunSaplingConsolidation(int blockHeight);
+    void CommitConsolidationTx(const CTransaction& tx);
+#endif // BZE_WITNESS
     /** Saves witness caches and best block locator to disk. */
     void SetBestChain(const CBlockLocator& loc);
     std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
