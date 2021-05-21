@@ -190,5 +190,5 @@ Example: (it may be different depending on MacOS version:
 Security Warnings
 -----------------
 
-**BZEdge is experimental and a work-in-progress.** Use at your own risk
+**BZEdge is experimental and a work-in-progress.** Use at your own risk.
 
