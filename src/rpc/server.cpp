@@ -35,6 +35,10 @@ using namespace RPCServer;
 using namespace std;
 using namespace boost::placeholders;
 
+#ifdef BZE_WITNESS
+bool fBuildingWitnessCache = false;
+bool fInitWitnessesBuilt = false;
+#endif
 static bool fRPCRunning = false;
 static bool fRPCInWarmup = true;
 static std::string rpcWarmupStatus("RPC server started");
@@ -491,6 +495,14 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
     const CRPCCommand *pcmd = tableRPC[strMethod];
     if (!pcmd)
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
+
+#ifdef BZE_WITNESS
+    if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany")
+        throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
+
+    if (fBuildingWitnessCache)
+        throw JSONRPCError(RPC_BUILDING_WITNESS_CACHE, "RPC Interface disabled while building witness cache. Check the debug.log for progress.");
+#endif
 
     g_rpcSignals.PreCommand(*pcmd);
 

@@ -97,7 +97,12 @@ const std::string CLIENT_NAME(RC_COIN_CLIENT_NAME);
 #endif
 #endif
 
+#ifdef BZE_WITNESS
+const std::string CLIENT_BUILD(BUILD_DESC DO_STRINGIZE(-witness));
+#else
 const std::string CLIENT_BUILD(BUILD_DESC CLIENT_VERSION_SUFFIX);
+#endif // BZE_WITNESS
+
 const std::string CLIENT_DATE(BUILD_DATE);
 
 std::string FormatVersion(int nVersion)

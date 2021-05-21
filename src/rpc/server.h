@@ -18,6 +18,11 @@
 
 #include <univalue.h>
 
+#ifdef BZE_WITNESS
+extern bool fBuildingWitnessCache;
+extern bool fInitWitnessesBuilt;
+#endif
+
 class AsyncRPCQueue;
 class CRPCCommand;
 

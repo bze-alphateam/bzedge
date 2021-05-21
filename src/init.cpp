@@ -480,8 +480,13 @@ std::string HelpMessage(HelpMessageMode mode)
         strUsage += HelpMessageOpt("-nuparams=hexBranchId:activationHeight", "Use given activation height for specified network upgrade (regtest-only)");
         strUsage += HelpMessageOpt("-nurejectoldversions", strprintf("Reject peers that don't know about the current epoch (regtest-only) (default: %u)", DEFAULT_NU_REJECT_OLD_VERSIONS));
     }
+#ifdef BZE_WITNESS
+    std::string debugCategories = "addrman, alert, bench, coindb, db, deletetx, estimatefee, http, libevent, lock, mempool, net, masternode, obfuscation, partitioncheck, paymentdisclosure, pow, proxy, prune, "
+                             "rand, receiveunsafe, reindex, rpc, selectcoins, swiftx, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
+#else
     std::string debugCategories = "addrman, alert, bench, coindb, db, estimatefee, http, libevent, lock, mempool, net, masternode, obfuscation, partitioncheck, paymentdisclosure, pow, proxy, prune, "
                              "rand, receiveunsafe, reindex, rpc, selectcoins, swiftx, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
+#endif // BZE_WITNESS
     strUsage += HelpMessageOpt("-debug=<category>", strprintf(_("Output debugging information (default: %u, supplying <category> is optional)"), 0) + ". " +
         _("If <category> is not supplied or if <category> = 1, output all debugging information.") + " " + _("<category> can be:") + " " + debugCategories + ". " +
         _("For multiple specific categories use -debug=<category> multiple times."));
