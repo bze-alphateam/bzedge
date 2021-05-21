@@ -538,12 +538,10 @@ TEST(ChecktransactionTests, JoinsplitSignatureDetectsOldBranchId) {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_BLOSSOM, 10);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_HEARTWOOD, 20);
     auto chainparams = Params();
 
     auto saplingBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
-    auto blossomBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_BLOSSOM].nBranchId;
 
     // Create a valid transaction for the Sapling epoch.
     CMutableTransaction mtx = GetValidTransaction(saplingBranchId);
@@ -1002,19 +1000,19 @@ TEST(ChecktransactionTests, OverwinteredContextualCreateTx) {
         1, false, 0, 0);
     // Overwinter activates
     ContextualCreateTxCheck(params, overwinterActivationHeight,
-        OVERWINTER_TX_VERSION, true, OVERWINTER_VERSION_GROUP_ID, overwinterActivationHeight + DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA);
+        OVERWINTER_TX_VERSION, true, OVERWINTER_VERSION_GROUP_ID, overwinterActivationHeight + DEFAULT_TX_EXPIRY_DELTA);
     // Close to Sapling activation
-    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA - 2,
+    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_TX_EXPIRY_DELTA - 2,
         OVERWINTER_TX_VERSION, true, OVERWINTER_VERSION_GROUP_ID, saplingActivationHeight - 2);
-    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA - 1,
+    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_TX_EXPIRY_DELTA - 1,
         OVERWINTER_TX_VERSION, true, OVERWINTER_VERSION_GROUP_ID, saplingActivationHeight - 1);
-    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA,
+    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_TX_EXPIRY_DELTA,
         OVERWINTER_TX_VERSION, true, OVERWINTER_VERSION_GROUP_ID, saplingActivationHeight - 1);
-    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA + 1,
+    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_TX_EXPIRY_DELTA + 1,
         OVERWINTER_TX_VERSION, true, OVERWINTER_VERSION_GROUP_ID, saplingActivationHeight - 1);
-    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA + 2,
+    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_TX_EXPIRY_DELTA + 2,
         OVERWINTER_TX_VERSION, true, OVERWINTER_VERSION_GROUP_ID, saplingActivationHeight - 1);
-    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA + 3,
+    ContextualCreateTxCheck(params, saplingActivationHeight - DEFAULT_TX_EXPIRY_DELTA + 3,
         OVERWINTER_TX_VERSION, true, OVERWINTER_VERSION_GROUP_ID, saplingActivationHeight - 1);
     // Just before Sapling activation
     ContextualCreateTxCheck(params, saplingActivationHeight - 4,
@@ -1027,7 +1025,7 @@ TEST(ChecktransactionTests, OverwinteredContextualCreateTx) {
         OVERWINTER_TX_VERSION, true, OVERWINTER_VERSION_GROUP_ID, saplingActivationHeight - 1);
     // Sapling activates
     ContextualCreateTxCheck(params, saplingActivationHeight,
-        SAPLING_TX_VERSION, true, SAPLING_VERSION_GROUP_ID, saplingActivationHeight + DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA);
+        SAPLING_TX_VERSION, true, SAPLING_VERSION_GROUP_ID, saplingActivationHeight + DEFAULT_TX_EXPIRY_DELTA);
 
     // Revert to default
     RegtestDeactivateSapling();
