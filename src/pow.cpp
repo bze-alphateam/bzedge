@@ -276,9 +276,6 @@ bool CheckEquihashSolution(const CBlockHeader *pblock, const Consensus::Params& 
     LogPrint("pow", "selected n,k : %d, %d \n", n,k);
     eh_HashState state;
 
-    LogPrint("pow", "CURRENT bze_pers_start_blocktime = %d\n", Params().get_bze_pers_start());
-    LogPrint("pow", "CURRENT block_time = %d\n", pblock->GetBlockTime());
-
     if(n == 144 && k == 5)
     {
 		if (pblock->GetBlockTime() < Params().get_bze_pers_start())
