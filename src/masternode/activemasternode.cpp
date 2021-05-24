@@ -70,14 +70,8 @@ void CActiveMasternode::ManageStatus()
 
         LogPrintf("CActiveMasternode::ManageStatus() - Checking inbound connection to '%s'\n", service.ToString());
 
-        if(ChainNameFromCommandLine() == CBaseChainParams::MAIN) {
-            if(service.GetPort() != 1990) {
-                notCapableReason = strprintf("Invalid port: %u - only 1990 is supported on mainnet.", service.GetPort());
-                LogPrintf("CActiveMasternode::ManageStatus() - not capable: %s\n", notCapableReason);
-                return;
-            }
-        } else if(service.GetPort() == 1990) {
-            notCapableReason = strprintf("Invalid port: %u - 1990 is only supported on mainnet.", service.GetPort());
+        if(service.GetPort() != Params().GetDefaultPort()) {
+            notCapableReason = strprintf("Invalid port: %u - only %u is supported on %s network.", service.GetPort(), Params().GetDefaultPort(), Params().NetworkIDString());
             LogPrintf("CActiveMasternode::ManageStatus() - not capable: %s\n", notCapableReason);
             return;
         }
@@ -275,14 +269,8 @@ bool CActiveMasternode::Register(std::string strService, std::string strKeyMaste
         return false;
     }
 
-    if(ChainNameFromCommandLine() == CBaseChainParams::MAIN) {
-        if (service.GetPort() != 1990) {
-            errorMessage = strprintf("Invalid port %u for masternode %s - only 1990 is supported on mainnet.", service.GetPort(), strService);
-            LogPrintf("CActiveMasternode::Register() - %s\n", errorMessage);
-            return false;
-        }
-    } else if (service.GetPort() == 1990) {
-        errorMessage = strprintf("Invalid port %u for masternode %s - 1990 is only supported on mainnet.", service.GetPort(), strService);
+    if (service.GetPort() != Params().GetDefaultPort()) {
+        errorMessage = strprintf("Invalid port %u for masternode %s - only %u is supported on %s network.", service.GetPort(), strService, Params().GetDefaultPort(), Params().NetworkIDString());
         LogPrintf("CActiveMasternode::Register() - %s\n", errorMessage);
         return false;
     }

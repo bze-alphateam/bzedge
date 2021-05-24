@@ -41,7 +41,7 @@ bool CMasternodeConfig::read(std::string& strErr)
         strErr= "file does not exist";
         return true; // Nothing to read, so just return
     }
-    else{
+    else {
      	if (streamConfig.is_open()){
 
 			while (streamConfig.good()){
@@ -67,21 +67,14 @@ bool CMasternodeConfig::read(std::string& strErr)
 				std::string hostname = "";
 				SplitHostPort(strs[1], port, hostname);
 
-				if (ChainNameFromCommandLine() == CBaseChainParams::MAIN) {
-					if (port != 1990) {
-						strErr = _("Invalid port detected in masternode.conf") + "\n" +
-								 strprintf(_("Line: %d"), linenumber) + "\n\"" + line + "\"" + "\n" +
-								 _("(must be 1990 for mainnet)");
-						streamConfig.close();
-						return false;
-					}
-				} else if (port == 1990) {
+				if (port != Params().GetDefaultPort()) {
 					strErr = _("Invalid port detected in masternode.conf") + "\n" +
-							 strprintf(_("Line: %d"), linenumber) + "\n\"" + line + "\"" + "\n" +
-							 _("(1990 could be used only on mainnet)");
+								strprintf(_("Line: %d"), linenumber) + "\n\"" + line + "\"" + "\n" +
+								strprintf(_("(must be %u for %s network)"), Params().GetDefaultPort(), Params().NetworkIDString());
 					streamConfig.close();
 					return false;
 				}
+				
 				add(strs[0], strs[1], strs[2], strs[3], strs[4]);
 			}
         }
