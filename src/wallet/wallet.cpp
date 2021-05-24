@@ -4298,9 +4298,15 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 #endif // BZE_WITNESS
 
             pindex = chainActive.Next(pindex);
-            if (GetTime() >= nNow + 60) {
-                nNow = GetTime();
-                LogPrintf("Still rescanning. At block %d. Progress=%f [ %i wallet transactions ]\n", pindex->nHeight, Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex), mapWallet.size());
+            const int64_t newNow= GetTime();
+
+            if (newNow >= nNow + 60) {
+                nNow =newNow;
+                //LogPrintf("Still rescanning. At block %d. Progress=%f [ %i wallet transactions ]\n", pindex->nHeight, Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex), mapWallet.size());
+                {
+                    LOCK(cs_rescan);
+                    LogPrintf("Still rescanning. At block %d. Progress=%.4f [ %i wallet transactions ]\n", pindex->nHeight, (double)(*dRescanProgress), mapWallet.size());
+                }
             }
         }
 
