@@ -453,13 +453,13 @@ public:
         fTestnetToBeDeprecatedFieldRPC = true;
 
 
-	checkpointData = (CCheckpointData) {
-		boost::assign::map_list_of
-		( 0, consensus.hashGenesisBlock),
-		genesis.nTime,
-		0,
-		0
-	};
+        checkpointData = (CCheckpointData) {
+            boost::assign::map_list_of
+            ( 0, consensus.hashGenesisBlock),
+            genesis.nTime,
+            0,
+            0
+        };
 
         // Hardcoded fallback value for the Sprout shielded value pool balance
         // for nodes that have not reindexed since the introduction of monitoring
@@ -469,7 +469,7 @@ public:
         fZIP209Enabled = true;
         hashSproutValuePoolCheckpointBlock = uint256S("000a95d08ba5dcbabe881fc6471d11807bcca7df5f1795c99f3ec4580db4279b"); // no idea
 
-	nStartMasternodePayments = 1520121600; //2018-03-04
+	    nStartMasternodePayments = 1520121600; //2018-03-04
         masternodeProtectionBlock = 17500;
         masternodeCollateral = 10;
     }

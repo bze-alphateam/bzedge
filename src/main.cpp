@@ -110,7 +110,7 @@ map<uint256, set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);;
 map<uint256, int64_t> mapRejectedBlocks  GUARDED_BY(cs_main);;
 void EraseOrphansFor(NodeId peer) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
-static const unsigned int DEFAULT_REORG_MN_CHECK = 10;
+static const unsigned int DEFAULT_REORG_MN_CHECK = 30;
 
 /**
  * Returns true if there are nRequired or more blocks of minVersion or above
@@ -3849,14 +3849,10 @@ static CBlockIndex* FindMostWorkChain() {
                 const CBlockIndex *pindexTestCheck = FindBlockAtHeight(heightCheck, (const CBlockIndex*)pindexTest);
                 if(pindexOldTipCheck->phashBlock != pindexTestCheck->phashBlock)
                 {
-                    auto msg = strprintf(
-                    "Invalid block hash"
-                      "\n\n") +
-                    _("Block details") + ":\n" +
-                    "- " + strprintf(_("Current tip: %s, height %d"),
-                        pindexOldTipCheck->phashBlock->GetHex(), pindexOldTipCheck->nHeight) + "\n" +
-                    "- " + strprintf(_("New tip:     %s, height %d"),
-                        pindexTestCheck->phashBlock->GetHex(), pindexTestCheck->nHeight) + "\n";
+                    auto msg = "Invalid block hash\n\n" + _("Block details") + ":\n" +
+                    "- " + strprintf(_("Current tip: %s, height %d"), pindexOldTipCheck->phashBlock->GetHex(), pindexOldTipCheck->nHeight) + "\n" +
+                    "- " + strprintf(_("New tip:     %s, height %d"), pindexTestCheck->phashBlock->GetHex(), pindexTestCheck->nHeight) + "\n";
+
                     LogPrintf("*** %s\n", msg);
                     fInvalidChain = true;
                 }
