@@ -513,6 +513,9 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 175016;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_BZSHARES].nProtocolVersion = 175018;
+        consensus.vUpgrades[Consensus::UPGRADE_BZSHARES].nActivationHeight =
+            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nProtocolVersion = 175018;
         consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
