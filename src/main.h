@@ -314,7 +314,7 @@ bool AcceptableInputs(CTxMemPool& pool, CValidationState& state, const CTransact
 int GetInputAge(CTxIn& vin);
 int GetInputAgeIX(uint256 nTXHash, CTxIn& vin);
 bool GetCoinAge(const CTransaction& tx, unsigned int nTxTime, uint64_t& nCoinAge);
-int GetIXConfirmations(uint256 nTXHash);
+//int GetIXConfirmations(uint256 nTXHash);
 
 /** Find block at height in a fork **/
 const CBlockIndex* FindBlockAtHeight(int nHeight, const CBlockIndex* pIndex);
@@ -537,9 +537,6 @@ extern CCoinsViewCache *pcoinsTip;
 
 /** Global variable that points to the active block tree (protected by cs_main) */
 extern CBlockTreeDB *pblocktree;
-
-/** Global variable that points to the spork database (protected by cs_main) */
-extern CSporkDB* pSporkDB;
 
 /**
  * Return the spend height, which is one more than the inputs.GetBestBlock().

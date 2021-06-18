@@ -8,10 +8,11 @@
 #include "db.h"
 #include "init.h"
 #include "main.h"
-#include "masternode/masternode-budget.h"
+//#include "masternode/masternode-budget.h"
 #include "masternode/masternode-payments.h"
 #include "masternode/masternodeconfig.h"
 #include "masternode/masternodeman.h"
+#include "masternode/masternode-sync.h"
 #include "rpc/server.h"
 #include "utilmoneystr.h"
 #include "key_io.h"
@@ -19,118 +20,6 @@
 #include <boost/tokenizer.hpp>
 
 #include <fstream>
-
-void SendMoney(const CTxDestination& address, CAmount nValue, CWalletTx& wtxNew, AvailableCoinsType coin_type = ALL_COINS)
-{
-    // Check amount
-    if (nValue <= 0)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid amount");
-
-    if (nValue > pwalletMain->GetBalance())
-        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
-
-    string strError;
-    if (pwalletMain->IsLocked()) {
-        strError = "Error: Wallet locked, unable to create transaction!";
-        LogPrintf("SendMoney() : %s", strError);
-        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-    }
-
-    // Parse BZEdge address
-    CScript scriptPubKey = GetScriptForDestination(address);
-
-    // Create and send the transaction
-    CReserveKey reservekey(pwalletMain);
-    CAmount nFeeRequired;
-    if (!pwalletMain->CreateTransaction(scriptPubKey, nValue, wtxNew, reservekey, nFeeRequired, strError, NULL, coin_type)) {
-        if (nValue + nFeeRequired > pwalletMain->GetBalance())
-            strError = strprintf("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!", FormatMoney(nFeeRequired));
-        LogPrintf("SendMoney() : %s\n", strError);
-        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-    }
-    if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
-        throw JSONRPCError(RPC_WALLET_ERROR, "Error: The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
-}
-
-UniValue obfuscation(const UniValue& params, bool fHelp)
-{
-    throw runtime_error("Obfuscation is not supported any more. Use Zerocoin\n");
-    
-    KeyIO keyIO(Params());
-
-    if (fHelp || params.size() == 0)
-        throw runtime_error(
-            "obfuscation <solarisaddress> <amount>\n"
-            "solarisaddress, reset, or auto (AutoDenominate)"
-            "<amount> is a real and will be rounded to the next 0.1" +
-            HelpRequiringPassphrase());
-
-    if (pwalletMain->IsLocked())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-
-    if (params[0].get_str() == "auto") {
-        if (fMasterNode)
-            return "ObfuScation is not supported from masternodes";
-
-        return "DoAutomaticDenominating " + (obfuScationPool.DoAutomaticDenominating() ? "successful" : ("failed: " + obfuScationPool.GetStatus()));
-    }
-
-    if (params[0].get_str() == "reset") {
-        obfuScationPool.Reset();
-        return "successfully reset obfuscation";
-    }
-
-    if (params.size() != 2)
-        throw runtime_error(
-            "obfuscation <solarisaddress> <amount>\n"
-            "solarisaddress, denominate, or auto (AutoDenominate)"
-            "<amount> is a real and will be rounded to the next 0.1" +
-            HelpRequiringPassphrase());
-
-    std::string strAddress = params[0].get_str();
-    CTxDestination dest = keyIO.DecodeDestination(strAddress);
-    if (!IsValidDestination(dest))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid BZEdge address");
-
-    // Amount
-    CAmount nAmount = AmountFromValue(params[1]);
-
-    // Wallet comments
-    CWalletTx wtx;
-    //    string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx, ONLY_DENOMINATED);
-    SendMoney(dest, nAmount, wtx, ONLY_DENOMINATED);
-    //    if (strError != "")
-    //        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-
-    return wtx.GetHash().GetHex();
-}
-
-UniValue getpoolinfo(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "getpoolinfo\n"
-            "\nReturns anonymous pool-related information\n"
-
-            "\nResult:\n"
-            "{\n"
-            "  \"current\": \"addr\",    (string) BZEdge address of current masternode\n"
-            "  \"state\": xxxx,        (string) unknown\n"
-            "  \"entries\": xxxx,      (numeric) Number of entries\n"
-            "  \"accepted\": xxxx,     (numeric) Number of entries accepted\n"
-            "}\n"
-
-            "\nExamples:\n" +
-            HelpExampleCli("getpoolinfo", "") + HelpExampleRpc("getpoolinfo", ""));
-
-    UniValue obj(UniValue::VOBJ);
-    obj.pushKV("current_masternode", mnodeman.GetCurrentMasterNode()->addr.ToString());
-    obj.pushKV("state", obfuScationPool.GetState());
-    obj.pushKV("entries", obfuScationPool.GetEntriesCount());
-    obj.pushKV("entries_accepted", obfuScationPool.GetCountEntriesAccepted());
-    return obj;
-}
-
 
 UniValue listmasternodes(const UniValue& params, bool fHelp)
 {
@@ -291,7 +180,6 @@ UniValue getmasternodecount (const UniValue& params, bool fHelp)
             "{\n"
             "  \"total\": n,        (numeric) Total masternodes\n"
             "  \"stable\": n,       (numeric) Stable count\n"
-            "  \"obfcompat\": n,    (numeric) Obfuscation Compatible\n"
             "  \"enabled\": n,      (numeric) Enabled masternodes\n"
             "  \"inqueue\": n       (numeric) Masternodes in queue\n"
             "}\n"
@@ -309,7 +197,6 @@ UniValue getmasternodecount (const UniValue& params, bool fHelp)
 
     obj.pushKV("total", mnodeman.size());
     obj.pushKV("stable", mnodeman.stable_size());
-    obj.pushKV("obfcompat", mnodeman.CountEnabled(ActiveProtocol()));
     obj.pushKV("enabled", mnodeman.CountEnabled());
     obj.pushKV("inqueue", nCount);
     obj.pushKV("ipv4", ipv4);
@@ -1165,8 +1052,6 @@ UniValue rewardactivemns(const UniValue& params, bool fHelp)
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
-    { "masternode",         "obfuscation",          &obfuscation,         true  },
-    { "masternode",         "getpoolinfo",          &getpoolinfo,         true  },
     { "masternode",         "masternode",           &masternode,          true  },
     { "masternode",         "listmasternodes",      &listmasternodes,     true  },
     { "masternode",         "rewardactivemns",      &rewardactivemns,     true  },

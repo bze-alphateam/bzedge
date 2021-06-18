@@ -14,7 +14,7 @@
 #include "addrman.h"
 #include "chainparams.h"
 #include "clientversion.h"
-#include "masternode/obfuscation.h"
+#include "masternode/masternode-sync.h"
 #include "consensus/consensus.h"
 #include "crypto/common.h"
 #include "crypto/sha256.h"

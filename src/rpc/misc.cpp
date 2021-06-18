@@ -12,7 +12,7 @@
 #include "net.h"
 #include "netbase.h"
 #include "rpc/server.h"
-#include "masternode/spork.h"
+//#include "masternode/spork.h"
 #include "txmempool.h"
 #include "util.h"
 #include "utilmoneystr.h"
@@ -488,48 +488,6 @@ public:
 };
 #endif
 
-/*
-    Used for updating/reading spork settings on the network
-*/
-UniValue spork(const UniValue& params, bool fHelp)
-{
-    if (params.size() == 1 && params[0].get_str() == "show") {
-        UniValue ret(UniValue::VOBJ);
-        for (int nSporkID = SPORK_START; nSporkID <= SPORK_END; nSporkID++) {
-            if (sporkManager.GetSporkNameByID(nSporkID) != "Unknown")
-                ret.pushKV(sporkManager.GetSporkNameByID(nSporkID), GetSporkValue(nSporkID));
-        }
-        return ret;
-    } else if (params.size() == 1 && params[0].get_str() == "active") {
-        UniValue ret(UniValue::VOBJ);
-        for (int nSporkID = SPORK_START; nSporkID <= SPORK_END; nSporkID++) {
-            if (sporkManager.GetSporkNameByID(nSporkID) != "Unknown")
-                ret.pushKV(sporkManager.GetSporkNameByID(nSporkID), IsSporkActive(nSporkID));
-        }
-        return ret;
-    } else if (params.size() == 2) {
-        int nSporkID = sporkManager.GetSporkIDByName(params[0].get_str());
-        if (nSporkID == -1) {
-            return "Invalid spork name";
-        }
-
-        // SPORK VALUE
-        int64_t nValue = params[1].get_int();
-
-        //broadcast new spork
-        if (sporkManager.UpdateSpork(nSporkID, nValue)) {
-            return "success";
-        } else {
-            return "failure";
-        }
-    }
-
-    throw runtime_error(
-        "spork <name> [<value>]\n"
-        "<name> is the corresponding spork name, or 'show' to show all current spork settings, active to show which sporks are active"
-        "<value> is a epoch datetime to enable or disable spork" +
-        HelpRequiringPassphrase());
-}
 
 UniValue validateaddress(const UniValue& params, bool fHelp)
 {
@@ -1574,7 +1532,6 @@ static const CRPCCommand commands[] =
     { "blockchain",         "getspentinfo",           &getspentinfo,           false }, /* insight explorer */
 
     { "masternode",         "mnsync",                 &mnsync,                 true  },
-    { "masternode",         "spork",                  &spork,                  true  },
 
     /* Not shown in help */
     { "hidden",             "setmocktime",            &setmocktime,            true  },

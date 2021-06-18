@@ -30,21 +30,17 @@
 
 #include <boost/thread/exceptions.hpp>
 
-extern bool fEnableSwiftTX;
-extern int nSwiftTXDepth;
+//extern bool fEnableSwiftTX;
+//extern int nSwiftTXDepth;
 extern bool fMasterNode;
-extern bool fLiteMode;
-extern int nZcashSendRounds;
+//extern int nZcashSendRounds;
 extern int nAnonymizeZcashAmount;
 extern int nLiquidityProvider;
 
 //Dash only features
-extern bool fEnableZcashSend;
 extern int64_t enforceMasternodePaymentsTime;
 extern std::string strMasterNodeAddr;
 
-extern std::vector<int64_t> obfuScationDenominations;
-extern std::string strBudgetMode;
 
 extern std::map<std::string, std::string> mapArgs;
 extern std::map<std::string, std::vector<std::string> > mapMultiArgs;

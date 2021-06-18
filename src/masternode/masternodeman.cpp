@@ -8,17 +8,28 @@
 #include "masternode/activemasternode.h"
 #include "addrman.h"
 #include "masternode/masternode.h"
-#include "masternode/obfuscation.h"
-#include "masternode/spork.h"
+
+#include "masternode/masternode-payments.h"
+#include "masternode/masternode-sync.h"
+
 #include "util.h"
 #include "consensus/validation.h"
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
 
+#include "key_io.h"
+
 #define MN_WINNER_MINIMUM_AGE 8000    // Age in seconds. This should be > MASTERNODE_REMOVAL_SECONDS to avoid misconfigured new nodes in the list.
 
 /** Masternode manager */
 CMasternodeMan mnodeman;
+
+CActiveMasternode activeMasternode;
+
+// A helper object for signing messages from Masternodes
+CMNSigner mnSigner;
+
+
 
 struct CompareLastPaid {
     bool operator()(const std::pair<int64_t, CTxIn>& t1,
@@ -242,6 +253,19 @@ void CMasternodeMan::Check()
     }
 }
 
+// MIODRAG
+bool CMasternodeMan::SetCollateralAddress(std::string strAddress)
+{
+    KeyIO keyIO(Params());
+    CTxDestination dest = keyIO.DecodeDestination(strAddress);
+    if (!IsValidDestination(dest)) {
+        LogPrintf("CMasternodeMan::SetCollateralAddress - Invalid collateral address\n");
+        return false;
+    }
+    collateralPubKey = GetScriptForDestination(dest);
+    return true;
+}
+
 void CMasternodeMan::CheckAndRemove(bool forceExpiredRemoval)
 {
     Check();
@@ -361,12 +385,12 @@ int CMasternodeMan::stable_size ()
         if (mn.protocolVersion < nMinProtocol) {
             continue; // Skip obsolete versions
         }
-        if (IsSporkActive (SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT)) {
+
             nMasternode_Age = GetTime() - mn.sigTime;
             if ((nMasternode_Age) < nMasternode_Min_Age) {
                 continue; // Skip masternodes younger than (default) 8000 sec (MUST be > MASTERNODE_REMOVAL_SECONDS)
             }
-        }
+        
         mn.Check ();
         if (!mn.IsEnabled ())
             continue; // Skip not-enabled masternodes
@@ -634,14 +658,13 @@ int CMasternodeMan::GetMasternodeRank(const CTxIn& vin, int64_t nBlockHeight, in
             continue;                                                       // Skip obsolete versions
         }
 
-        if (IsSporkActive(SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT))
-        {
-            nMasternode_Age = now - mn.sigTime;
-            if ((nMasternode_Age) < nMasternode_Min_Age) {
-                if (fDebug) LogPrint("masternode","Skipping just activated Masternode %s. Age: %ld\n", mn.addr.ToString(), nMasternode_Age);
-                continue;                                                   // Skip masternodes younger than (default) 1 hour
-            }
+
+        nMasternode_Age = now - mn.sigTime;
+        if ((nMasternode_Age) < nMasternode_Min_Age) {
+            if (fDebug) LogPrint("masternode","Skipping just activated Masternode %s. Age: %ld\n", mn.addr.ToString(), nMasternode_Age);
+            continue;                                                   // Skip masternodes younger than (default) 1 hour
         }
+      
         
         if (fOnlyActive)
         {
@@ -749,18 +772,19 @@ void CMasternodeMan::ProcessMasternodeConnections()
 
     LOCK(cs_vNodes);
     for (CNode* pnode : vNodes) {
+        /*
         if (pnode->fObfuScationMaster) {
             if (obfuScationPool.pSubmittedToMasternode != NULL && pnode->addr == obfuScationPool.pSubmittedToMasternode->addr) continue;
             LogPrint("masternode","Closing Masternode connection peer=%i \n", pnode->GetId());
             pnode->fObfuScationMaster = false;
             pnode->Release();
         }
+        */
     }
 }
 
 void CMasternodeMan::ProcessMessage(CNode* pfrom, std::string& strCommand, CDataStream& vRecv)
 {
-    if (fLiteMode) return; //disable all Obfuscation/Masternode related functionality
     if (!masternodeSync.IsBlockchainSynced()) return;
 
     LOCK(cs_process_message);
@@ -776,7 +800,8 @@ void CMasternodeMan::ProcessMessage(CNode* pfrom, std::string& strCommand, CData
         mapSeenMasternodeBroadcast.insert(std::make_pair(mnb.GetHash(), mnb));
 
         int nDoS = 0;
-        if (!mnb.CheckAndUpdate(nDoS)) {
+        if (!mnb.CheckAndUpdate(nDoS))
+        {
             if (nDoS > 0)
             {
                 Misbehaving(pfrom->GetId(), nDoS);
@@ -788,7 +813,7 @@ void CMasternodeMan::ProcessMessage(CNode* pfrom, std::string& strCommand, CData
 
         // make sure the vout that was signed is related to the transaction that spawned the Masternode
         //  - this is expensive, so it's only done once per Masternode
-        if (!obfuScationSigner.IsVinAssociatedWithPubkey(mnb.vin, mnb.pubKeyCollateralAddress)) {
+        if (!mnSigner.IsVinAssociatedWithPubkey(mnb.vin, mnb.pubKeyCollateralAddress)) {
             LogPrint("masternode","mnb - Got mismatched pubkey and vin\n");
             Misbehaving(pfrom->GetId(), 33);
             return;
@@ -897,8 +922,6 @@ void CMasternodeMan::ProcessMessage(CNode* pfrom, std::string& strCommand, CData
     // Light version for OLD MASSTERNODES - fake pings, no self-activation
     else if (strCommand == "dsee") { //ObfuScation Election Entry
 
-        if (IsSporkActive(SPORK_10_MASTERNODE_PAY_UPDATED_NODES)) return;
-
         CTxIn vin;
         CService addr;
         CPubKey pubkey;
@@ -958,7 +981,7 @@ void CMasternodeMan::ProcessMessage(CNode* pfrom, std::string& strCommand, CData
         }
 
         std::string errorMessage = "";
-        if (!obfuScationSigner.VerifyMessage(pubkey, vchSig, strMessage, errorMessage)) {
+        if (!mnSigner.VerifyMessage(pubkey, vchSig, strMessage, errorMessage)) {
             LogPrint("masternode","dsee - Got bad Masternode address signature\n");
             Misbehaving(pfrom->GetId(), 100);
             return;
@@ -1010,7 +1033,7 @@ void CMasternodeMan::ProcessMessage(CNode* pfrom, std::string& strCommand, CData
         mapSeenDsee.insert(std::make_pair(vin.prevout, pubkey));
         // make sure the vout that was signed is related to the transaction that spawned the Masternode
         //  - this is expensive, so it's only done once per Masternode
-        if (!obfuScationSigner.IsVinAssociatedWithPubkey(vin, pubkey)) {
+        if (!mnSigner.IsVinAssociatedWithPubkey(vin, pubkey)) {
             LogPrint("masternode","dsee - Got mismatched pubkey and vin\n");
             Misbehaving(pfrom->GetId(), 100);
             return;
@@ -1024,7 +1047,7 @@ void CMasternodeMan::ProcessMessage(CNode* pfrom, std::string& strCommand, CData
 
         CValidationState state;
         CMutableTransaction tx = CMutableTransaction();
-        CTxOut vout = CTxOut(((float)Params().GetMasternodeCollateral() - 0.01) * COIN, obfuScationPool.collateralPubKey);
+        CTxOut vout = CTxOut(((float)Params().GetMasternodeCollateral() - 0.01) * COIN, mnodeman.collateralPubKey);
         tx.vin.push_back(vin);
         tx.vout.push_back(vout);
 
@@ -1102,8 +1125,6 @@ void CMasternodeMan::ProcessMessage(CNode* pfrom, std::string& strCommand, CData
 
     else if (strCommand == "dseep") { //ObfuScation Election Entry Ping
 
-        if (IsSporkActive(SPORK_10_MASTERNODE_PAY_UPDATED_NODES)) return;
-
         CTxIn vin;
         vector<unsigned char> vchSig;
         int64_t sigTime;
@@ -1139,7 +1160,7 @@ void CMasternodeMan::ProcessMessage(CNode* pfrom, std::string& strCommand, CData
                 std::string strMessage = pmn->addr.ToString() + boost::lexical_cast<std::string>(sigTime) + boost::lexical_cast<std::string>(stop);
 
                 std::string errorMessage = "";
-                if (!obfuScationSigner.VerifyMessage(pmn->pubKeyMasternode, vchSig, strMessage, errorMessage)) {
+                if (!mnSigner.VerifyMessage(pmn->pubKeyMasternode, vchSig, strMessage, errorMessage)) {
                     LogPrint("masternode","dseep - Got bad Masternode address signature %s \n", vin.prevout.hash.ToString());
                     //Misbehaving(pfrom->GetId(), 100);
                     return;
@@ -1226,4 +1247,116 @@ std::string CMasternodeMan::ToString() const
     info << "Masternodes: " << (int)vMasternodes.size() << ", peers who asked us for Masternode list: " << (int)mAskedUsForMasternodeList.size() << ", peers we asked for Masternode list: " << (int)mWeAskedForMasternodeList.size() << ", entries in Masternode list we asked for: " << (int)mWeAskedForMasternodeListEntry.size() << ", nDsqCount: " << (int)nDsqCount;
 
     return info.str();
+}
+
+bool CMNSigner::IsVinAssociatedWithPubkey(CTxIn& vin, CPubKey& pubkey)
+{
+    CScript payee2;
+    payee2 = GetScriptForDestination(pubkey.GetID());
+
+    CTransaction txVin;
+    uint256 hash;
+    if (GetTransaction(vin.prevout.hash, txVin, Params().GetConsensus(), hash, true)) {
+        for (CTxOut out : txVin.vout) {
+            if (out.nValue == Params().GetMasternodeCollateral() * COIN) {
+                if (out.scriptPubKey == payee2) return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool CMNSigner::SetKey(std::string strSecret, std::string& errorMessage, CKey& key, CPubKey& pubkey)
+{
+    KeyIO keyIO(Params());
+    CKey key2 = keyIO.DecodeSecret(strSecret);
+
+    if (!key2.IsValid()) {
+        errorMessage = _("Invalid private key.");
+        return false;
+    }
+
+    key = key2;
+    pubkey = key.GetPubKey();
+
+    return true;
+}
+
+bool CMNSigner::GetKeysFromSecret(std::string strSecret, CKey& keyRet, CPubKey& pubkeyRet)
+{
+    KeyIO keyIO(Params());
+    CKey key2 = keyIO.DecodeSecret(strSecret);
+
+    if (!key2.IsValid()) return false;
+
+    keyRet = key2;
+    pubkeyRet = keyRet.GetPubKey();
+
+    return true;
+}
+
+bool CMNSigner::SignMessage(std::string strMessage, std::string& errorMessage, vector<unsigned char>& vchSig, CKey key)
+{
+    CHashWriter ss(SER_GETHASH, 0);
+    ss << strMessageMagic;
+    ss << strMessage;
+
+    if (!key.SignCompact(ss.GetHash(), vchSig)) {
+        errorMessage = _("Signing failed.");
+        return false;
+    }
+
+    return true;
+}
+
+bool CMNSigner::VerifyMessage(CPubKey pubkey, vector<unsigned char>& vchSig, std::string strMessage, std::string& errorMessage)
+{
+    CHashWriter ss(SER_GETHASH, 0);
+    ss << strMessageMagic;
+    ss << strMessage;
+
+    CPubKey pubkey2;
+    if (!pubkey2.RecoverCompact(ss.GetHash(), vchSig)) {
+        errorMessage = _("Error recovering public key.");
+        return false;
+    }
+
+    if (fDebug && pubkey2.GetID() != pubkey.GetID())
+        LogPrintf("CMNSigner::VerifyMessage -- keys don't match: %s %s\n", pubkey2.GetID().ToString(), pubkey.GetID().ToString());
+
+    return (pubkey2.GetID() == pubkey.GetID());
+}
+
+void ThreadMNWatchdog()
+{
+    // Make this thread recognisable as the wallet flushing thread
+    RenameThread("bzedge-mn-watchdog");
+
+    unsigned int c = 0;
+
+    while (true) {
+        MilliSleep(1000);
+        //LogPrintf("ThreadCheckObfuScationPool::check timeout\n");
+
+        if (IsInitialBlockDownload(Params().GetConsensus()))
+            continue;
+
+        // try to sync from all available nodes, one step at a time
+        masternodeSync.Process();
+
+        if (masternodeSync.IsBlockchainSynced()) {
+            c++;
+
+            // check if we should activate or ping every few minutes,
+            // start right after sync is considered to be done
+            if (c % MASTERNODE_PING_SECONDS == 1) activeMasternode.ManageStatus();
+
+            if (c % 60 == 0) {
+                mnodeman.CheckAndRemove();
+                mnodeman.ProcessMasternodeConnections();
+                masternodePayments.CleanPaymentList();
+            }
+        }
+    }
 }
