@@ -34,7 +34,8 @@
 #include "utilmoneystr.h"
 #include "validationinterface.h"
 #include "masternode/masternode-payments.h"
-#include "masternode/spork.h"
+#include "masternode/masternodeman.h"
+//#include "masternode/spork.h"
 
 #include <librustzcash.h>
 

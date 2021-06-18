@@ -11,6 +11,7 @@
 #include "key.h"
 #include "main.h"
 #include "masternode/masternode.h"
+#include "masternode/activemasternode.h"
 #include "net.h"
 #include "sync.h"
 #include "util.h"
@@ -21,8 +22,14 @@
 using namespace std;
 
 class CMasternodeMan;
+class CMNSigner;
+class CActiveMasternode;
 
 extern CMasternodeMan mnodeman;
+extern CMNSigner mnSigner;
+extern CActiveMasternode activeMasternode;
+extern std::string strMasterNodePrivKey;
+
 void DumpMasternodes();
 
 /** Access to the MN database (mncache.dat)
@@ -75,6 +82,16 @@ public:
 
     // keep track of dsq count to prevent masternodes from gaming obfuscation queue
     int64_t nDsqCount;
+
+    // where collateral should be made out to
+    CScript collateralPubKey;
+
+    bool SetCollateralAddress(std::string strAddress);
+
+    void InitCollateralAddress()
+    {
+        SetCollateralAddress(Params().ObfuscationPoolDummyAddress());
+    }
 
     ADD_SERIALIZE_METHODS;
 
@@ -160,5 +177,24 @@ public:
 
     bool HasEnabledMasternode(int protocolVersion = -1);
 };
+
+/** Helper object for signing and checking signatures
+ */
+class CMNSigner
+{
+public:
+    /// Is the input associated with this public key? (and there is 250k BZE - checking if valid masternode)
+    bool IsVinAssociatedWithPubkey(CTxIn& vin, CPubKey& pubkey);
+    /// Set the private/public key values, returns true if successful
+    bool GetKeysFromSecret(std::string strSecret, CKey& keyRet, CPubKey& pubkeyRet);
+    /// Set the private/public key values, returns true if successful
+    bool SetKey(std::string strSecret, std::string& errorMessage, CKey& key, CPubKey& pubkey);
+    /// Sign the message, returns true if successful
+    bool SignMessage(std::string strMessage, std::string& errorMessage, std::vector<unsigned char>& vchSig, CKey key);
+    /// Verify the message, returns true if succcessful
+    bool VerifyMessage(CPubKey pubkey, std::vector<unsigned char>& vchSig, std::string strMessage, std::string& errorMessage);
+};
+
+void ThreadMNWatchdog();
 
 #endif

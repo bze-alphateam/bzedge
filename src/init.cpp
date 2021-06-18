@@ -24,7 +24,7 @@
 #include "key_io.h"
 #endif
 #include "main.h"
-#include "masternode/masternode-budget.h"
+//#include "masternode/masternode-budget.h"
 #include "masternode/masternode-payments.h"
 #include "masternode/masternodeconfig.h"
 #include "masternode/masternodeman.h"
@@ -37,8 +37,8 @@
 #include "rpc/register.h"
 #include "script/standard.h"
 #include "script/sigcache.h"
-#include "masternode/spork.h"
-#include "masternode/sporkdb.h"
+//#include "masternode/spork.h"
+//#include "masternode/sporkdb.h"
 #include "scheduler.h"
 #include "txdb.h"
 #include "torcontrol.h"
@@ -226,7 +226,6 @@ void Shutdown()
     StopNode();
     StopTorControl();
     DumpMasternodes();
-    DumpBudgets();
     DumpMasternodePayments();
     UnregisterNodeSignals(GetNodeSignals());
 
@@ -254,8 +253,6 @@ void Shutdown()
         pcoinsdbview = NULL;
         delete pblocktree;
         pblocktree = NULL;
-        delete pSporkDB;
-        pSporkDB = NULL;
     }
 #ifdef ENABLE_WALLET
     if (pwalletMain)
@@ -481,10 +478,10 @@ std::string HelpMessage(HelpMessageMode mode)
         strUsage += HelpMessageOpt("-nurejectoldversions", strprintf("Reject peers that don't know about the current epoch (regtest-only) (default: %u)", DEFAULT_NU_REJECT_OLD_VERSIONS));
     }
 #ifdef BZE_WITNESS
-    std::string debugCategories = "addrman, alert, bench, coindb, db, deletetx, estimatefee, http, libevent, lock, mempool, net, masternode, obfuscation, partitioncheck, paymentdisclosure, pow, proxy, prune, "
+    std::string debugCategories = "addrman, alert, bench, coindb, db, deletetx, estimatefee, http, libevent, lock, mempool, net, masternode, partitioncheck, paymentdisclosure, pow, proxy, prune, "
                              "rand, receiveunsafe, reindex, rpc, selectcoins, swiftx, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
 #else
-    std::string debugCategories = "addrman, alert, bench, coindb, db, estimatefee, http, libevent, lock, mempool, net, masternode, obfuscation, partitioncheck, paymentdisclosure, pow, proxy, prune, "
+    std::string debugCategories = "addrman, alert, bench, coindb, db, estimatefee, http, libevent, lock, mempool, net, masternode, partitioncheck, paymentdisclosure, pow, proxy, prune, "
                              "rand, receiveunsafe, reindex, rpc, selectcoins, swiftx, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
 #endif // BZE_WITNESS
     strUsage += HelpMessageOpt("-debug=<category>", strprintf(_("Output debugging information (default: %u, supplying <category> is optional)"), 0) + ". " +
@@ -494,15 +491,6 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-help-debug", _("Show all debugging options (usage: --help -help-debug)"));
     strUsage += HelpMessageOpt("-logips", strprintf(_("Include IP addresses in debug output (default: %u)"), DEFAULT_LOGIPS));
     strUsage += HelpMessageOpt("-logtimestamps", strprintf(_("Prepend debug output with timestamp (default: %u)"), DEFAULT_LOGTIMESTAMPS));
-strUsage += HelpMessageGroup(_("DarkSend options:"));
-    strUsage += HelpMessageOpt("-enablezcashsend=<n>",strprintf(_("Enable use of automated darksend for funds stored in this wallet (0-1, default: %u)"), 0));
-    strUsage += HelpMessageOpt("-zcashsendrounds=<n>",strprintf(_("Use N separate masternodes to anonymize funds  (2-8, default: %u)"), 2));
-    strUsage += HelpMessageOpt("-anonymizezcashamount=<n>",strprintf(_("Keep N ZCASH anonymized (default: %u)"), 0));
-    strUsage += HelpMessageOpt("-liquidityprovider=<n>",strprintf(_("Provide liquidity to Darksend by infrequently mixing coins on a continual basis (0-100, default: %u, 1=very frequent, high fees, 100=very infrequent, low fees)"), 0));
-
-    strUsage += HelpMessageGroup(_("SwiftX options:"));
-    strUsage += HelpMessageOpt("-enableswifttx=<n>", strprintf(_("Enable SwiftX, show confirmations for locked transactions (bool, default: %s)"), "true"));
-    strUsage += HelpMessageOpt("-swifttxdepth=<n>", strprintf(_("Show N confirmations for a successfully locked transaction (0-9999, default: %u)"), nSwiftTXDepth));
 
     if (showDebug)
     {
@@ -1285,12 +1273,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             threadGroup.create_thread(&ThreadScriptCheck);
     }
 
-    if (mapArgs.count("-sporkkey")) // spork priv key
-    {
-        if (!sporkManager.SetPrivKey(GetArg("-sporkkey", "")))
-            return InitError(_("Unable to sign spork message, wrong key?"));
-    }
-
     // Start the lightweight task scheduler thread
     CScheduler::Function serviceLoop = boost::bind(&CScheduler::serviceQueue, &scheduler);
     threadGroup.create_thread(boost::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
@@ -1539,9 +1521,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 delete pcoinsdbview;
                 delete pcoinscatcher;
                 delete pblocktree;
-                delete pSporkDB;
 
-                pSporkDB = new CSporkDB(0, false, false);
                 pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex);
                 pcoinsdbview = new CCoinsViewDB(nCoinDBCache, false, fReindex);
                 pcoinscatcher = new CCoinsViewErrorCatcher(pcoinsdbview);
@@ -1553,10 +1533,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     if (fPruneMode)
                         CleanupBlockRevFiles();
                 }
-
-				// Load previous sessions sporks if we have them.
-                // uiInterface.InitMessage(_("Loading sporks..."));
-                LoadSporksFromDB();
 
                 if (!LoadBlockIndex()) {
                     strLoadError = _("Error loading block database");
@@ -1829,6 +1805,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             LogPrintf("file format is unknown or invalid, please fix it manually\n");
     }
 
+    /*
     uiInterface.InitMessage(_("Loading budget cache..."));
 
     CBudgetDB budgetdb;
@@ -1847,7 +1824,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     //flag our cached items so we send them to our peers
     budget.ResetSync();
     budget.ClearSeen();
-
+*/
 
     uiInterface.InitMessage(_("Loading masternode payment cache..."));
 
@@ -1891,7 +1868,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             CKey key;
             CPubKey pubkey;
 
-            if (!obfuScationSigner.SetKey(strMasterNodePrivKey, errorMessage, key, pubkey)) {
+            if (!mnSigner.SetKey(strMasterNodePrivKey, errorMessage, key, pubkey)) {
                 return InitError(_("Invalid masternodeprivkey. Please see documenation."));
             }
 
@@ -1903,7 +1880,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
 
     //get the mode of budget voting for this masternode
-    strBudgetMode = GetArg("-budgetvotemode", "auto");
+    //strBudgetMode = GetArg("-budgetvotemode", "auto");
 
     if (GetBoolArg("-mnconflock", true) && pwalletMain) {
         LOCK(pwalletMain->cs_wallet);
@@ -1923,61 +1900,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 			}
 		}
     }
-    fEnableZcashSend = GetBoolArg("-enablezcashsend", false);
 
-    nZcashSendRounds = GetArg("-zcashsendrounds", 10);
-    if (nZcashSendRounds > 100) nZcashSendRounds = 100;
-    if (nZcashSendRounds < 10) nZcashSendRounds = 10;
+    mnodeman.InitCollateralAddress();
 
-    nLiquidityProvider = GetArg("-liquidityprovider", 0); //0-100
-    if(nLiquidityProvider != 0) {
-        obfuScationPool.SetMinBlockSpacing(std::min(nLiquidityProvider,100)*15);
-        fEnableZcashSend = true;
-        nZcashSendRounds = 99999;
-    }
-
-    nAnonymizeZcashAmount = GetArg("-anonymizezcashamount", 0);
-    if (nAnonymizeZcashAmount > 999999) nAnonymizeZcashAmount = 999999;
-    if (nAnonymizeZcashAmount < 2) nAnonymizeZcashAmount = 2;
-
-    //lite mode disables all Masternode and Obfuscation related functionality
-    fLiteMode = GetBoolArg("-litemode", false);
-    if (fMasterNode && fLiteMode) {
-        return InitError("You can not start a masternode in litemode");
-    }
-
-    fEnableSwiftTX = GetBoolArg("-enableswifttx", fEnableSwiftTX);
-    nSwiftTXDepth = GetArg("-swifttxdepth", nSwiftTXDepth);
-    nSwiftTXDepth = std::min(std::max(nSwiftTXDepth, 0), 60);
-
-    LogPrintf("fLiteMode %d\n", fLiteMode);
-    LogPrintf("nSwiftTXDepth %d\n", nSwiftTXDepth);
-    LogPrintf("Budget Mode %s\n", strBudgetMode.c_str());
-    LogPrintf("Zcash send rounds %d\n", nZcashSendRounds);
-    LogPrintf("Anonymize Zcash Amount %d\n", nAnonymizeZcashAmount);
-    /* Denominations
-
-       A note about convertability. Within Obfuscation pools, each denomination
-       is convertable to another.
-
-       For example:
-       1XLR+1000 == (.1XLR+100)*10
-       10XLR+10000 == (1XLR+1000)*10
-    */
-    obfuScationDenominations.push_back((10000 * COIN) + 10000000);
-    obfuScationDenominations.push_back((1000 * COIN) + 1000000);
-    obfuScationDenominations.push_back((100 * COIN) + 100000);
-    obfuScationDenominations.push_back((10 * COIN) + 10000);
-    obfuScationDenominations.push_back((1 * COIN) + 1000);
-    obfuScationDenominations.push_back((.1 * COIN) + 100);
-    /* Disabled till we need them
-    obfuScationDenominations.push_back( (.01      * COIN)+10 );
-    obfuScationDenominations.push_back( (.001     * COIN)+1 );
-    */
-
-    obfuScationPool.InitCollateralAddress();
-
-    threadGroup.create_thread(boost::bind(&ThreadCheckObfuScationPool));
+    threadGroup.create_thread(boost::bind(&ThreadMNWatchdog));
 
 
     

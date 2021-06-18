@@ -153,8 +153,6 @@ BITCOIN_CORE_H = \
   consensus/validation.h \
   core_io.h \
   core_memusage.h \
-  masternode/obfuscation.h \
-  masternode/obfuscation-relay.h \
   deprecation.h \
   experimental_features.h \
   fs.h \
@@ -174,7 +172,6 @@ BITCOIN_CORE_H = \
   memusage.h \
   masternode/masternode.h \
   masternode/masternode-payments.h \
-  masternode/masternode-budget.h \
   masternode/masternode-sync.h \
   masternode/masternodeman.h \
   masternode/masternodeconfig.h \
@@ -210,8 +207,6 @@ BITCOIN_CORE_H = \
   script/ismine.h \
   serialize.h \
   spentindex.h \
-  masternode/spork.h \
-  masternode/sporkdb.h \
   streams.h \
   support/allocators/secure.h \
   support/allocators/zeroafterfree.h \
@@ -297,7 +292,6 @@ libbitcoin_server_a_SOURCES = \
   rest.cpp \
   rpc/blockchain.cpp \
   rpc/masternode.cpp \
-  rpc/masternode-budget.cpp \
   rpc/mining.cpp \
   rpc/misc.cpp \
   rpc/net.cpp \
@@ -305,7 +299,6 @@ libbitcoin_server_a_SOURCES = \
   rpc/server.cpp \
   script/sigcache.cpp \
   script/ismine.cpp \
-  masternode/sporkdb.cpp \
   timedata.cpp \
   torcontrol.cpp \
   txdb.cpp \
@@ -329,8 +322,6 @@ libbitcoin_wallet_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_wallet_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_wallet_a_SOURCES = \
   masternode/activemasternode.cpp \
-  masternode/obfuscation.cpp \
-  masternode/obfuscation-relay.cpp \
   zcbenchmarks.cpp \
   zcbenchmarks.h \
   wallet/asyncrpcoperation_common.cpp \
@@ -341,9 +332,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/asyncrpcoperation_shieldcoinbase.cpp \
   wallet/crypter.cpp \
   wallet/db.cpp \
-  masternode/swifttx.cpp \
   masternode/masternode.cpp \
-  masternode/masternode-budget.cpp \
   masternode/masternode-payments.cpp \
   masternode/masternode-sync.cpp \
   masternode/masternodeconfig.cpp \
@@ -426,8 +415,6 @@ libbitcoin_common_a_SOURCES = \
   script/script_error.cpp \
   script/sign.cpp \
   script/standard.cpp \
-  masternode/spork.cpp \
-  masternode/sporkdb.cpp \
   transaction_builder.cpp \
   utiltest.cpp \
   warnings.cpp \
