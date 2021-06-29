@@ -10,44 +10,49 @@
  */
 const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
     {
-        /*.nBranchId =*/ 0,
-        /*.strName =*/ "Sprout",
-        /*.strInfo =*/ "The Zcash network at launch",
+        .nBranchId = 0,
+        .strName = "Sprout",
+        .strInfo = "The Zcash network at launch",
     },
     {
-        /*.nBranchId =*/ 0x74736554,
-        /*.strName =*/ "Test dummy",
-        /*.strInfo =*/ "Test dummy info",
+        .nBranchId = 0x74736554,
+        .strName = "Test dummy",
+        .strInfo = "Test dummy info",
     },
     {
-        /*.nBranchId =*/ 0x6f77627a,
-        /*.strName =*/ "Overwinter",
-        /*.strInfo =*/ "See https://z.cash/upgrade/overwinter/ for details.",
+        .nBranchId = 0x6f77627a,
+        .strName = "Overwinter",
+        .strInfo = "See https://z.cash/upgrade/overwinter/ for details.",
     },
     {
-        /*.nBranchId =*/ 0x736c627a,
-        /*.strName =*/ "Sapling",
-        /*.strInfo =*/ "See https://z.cash/upgrade/sapling/ for details.",
+        .nBranchId = 0x736c627a,
+        .strName = "Sapling",
+        .strInfo = "See https://z.cash/upgrade/sapling/ for details.",
     },
     {
-        /*.nBranchId =*/ 0x736c627a,
-        /*.strName =*/ "BZShares",
-        /*.strInfo =*/ "Masternodes",
+        .nBranchId = 0x736c627a,
+        .strName = "BZShares",
+        .strInfo = "Masternodes",
     },
     {
-        /*.nBranchId =*/ 0x427a6253,
-        /*.strName =*/ "Blossom",
-        /*.strInfo =*/ "See https://z.cash/upgrade/blossom/ for details.",
+        .nBranchId = 0x68627a77,
+        .strName = "Heartwood",
+        .strInfo = "See https://z.cash/upgrade/heartwood/ for details.",
     },
     {
-        /*.nBranchId =*/ 0x68627a77,
-        /*.strName =*/ "Heartwood",
-        /*.strInfo =*/ "See https://z.cash/upgrade/heartwood/ for details.",
+        .nBranchId = 0x634e4279,
+        .strName = "Canopy",
+        .strInfo = "See https://z.cash/upgrade/canopy/ for details.",
     },
     {
-        /*.nBranchId =*/ 0x634e4279,
-        /*.strName =*/ "Canopy",
-        /*.strInfo =*/ "See https://z.cash/upgrade/canopy/ for details.",
+        .nBranchId = 0x70457449,
+        .strName = "NU5",
+        .strInfo = "See https://z.cash/upgrade/nu5/ for details.",
+    },
+    {
+        .nBranchId = 0xffffffff,
+        .strName = "ZFUTURE",
+        .strInfo = "Future network upgrade (integration testing only)",
     }
 };
 

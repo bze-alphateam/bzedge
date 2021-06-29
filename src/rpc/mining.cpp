@@ -34,7 +34,7 @@
 
 #include <univalue.h>
 
-#include "masternodeman.h"
+#include "masternode/masternodeman.h"
 
 using namespace std;
 

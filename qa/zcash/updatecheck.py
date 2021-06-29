@@ -92,8 +92,8 @@ def get_dependency_list():
                 { "v1.13": (1, 13) }),
             LevelDbVersionGetter()),
         Dependency("univalue",
-            GithubTagReleaseLister("jgarzik", "univalue", "^v(\d+)\.(\d+)\.(\d+)$",
-                { "v1.1.1": (1, 1, 1) }),
+            GithubTagReleaseLister("bitcoin-core", "univalue", "^v(\d+)\.(\d+)\.(\d+)$",
+                { "v1.0.1": (1, 0, 1) }),
             UnivalueVersionGetter()),
         Dependency("utfcpp",
             GithubTagReleaseLister("nemtrif", "utfcpp", "^v(\d+)\.(\d+)(?:\.(\d+))?$",
@@ -107,7 +107,7 @@ class GitHubToken:
     def __init__(self):
         token_path = os.path.join(SOURCE_ROOT, ".updatecheck-token")
         try:
-            with open(token_path) as f:
+            with open(token_path, encoding='utf8') as f:
                 token = f.read().strip()
                 self._user = token.split(":")[0]
                 self._password = token.split(":")[1]
@@ -205,7 +205,7 @@ class GithubTagReleaseLister:
 
 class BerkeleyDbReleaseLister:
     def known_releases(self):
-        url = "https://www.oracle.com/technetwork/products/berkeleydb/downloads/index-082944.html"
+        url = "https://www.oracle.com/database/technologies/related/berkeleydb-downloads.html"
         r = requests.get(url)
         if r.status_code != 200:
             raise RuntimeError("Request to Berkeley DB download directory failed.")

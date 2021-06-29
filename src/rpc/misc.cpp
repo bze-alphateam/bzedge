@@ -8,11 +8,11 @@
 #include "key_io.h"
 #include "experimental_features.h"
 #include "main.h"
-#include "masternode-sync.h"
+#include "masternode/masternode-sync.h"
 #include "net.h"
 #include "netbase.h"
 #include "rpc/server.h"
-#include "spork.h"
+//#include "masternode/spork.h"
 #include "txmempool.h"
 #include "util.h"
 #include "utilmoneystr.h"
@@ -390,7 +390,8 @@ UniValue mnsync(const UniValue& params, bool fHelp)
 
             "\nResult ('status' mode):\n"
             "{\n"
-            "  \"IsBlockchainSynced\": true|false,    (boolean) 'true' if blockchain is synced\n"
+            "  \"IsBlockchainSynced\": true|false,  (boolean) 'true' if blockchain is synced\n"
+            "  \"IsSynced\": true|false,            (boolean) 'true' if masternode sync is finished\n"
             "  \"lastMasternodeList\": xxxx,        (numeric) Timestamp of last MN list message\n"
             "  \"lastMasternodeWinner\": xxxx,      (numeric) Timestamp of last MN winner message\n"
             "  \"lastBudgetItem\": xxxx,            (numeric) Timestamp of last MN budget message\n"
@@ -418,6 +419,7 @@ UniValue mnsync(const UniValue& params, bool fHelp)
         UniValue obj(UniValue::VOBJ);
 
         obj.pushKV("IsBlockchainSynced", masternodeSync.IsBlockchainSynced());
+        obj.pushKV("IsSynced", masternodeSync.IsSynced());
         obj.pushKV("lastMasternodeList", masternodeSync.lastMasternodeList);
         obj.pushKV("lastMasternodeWinner", masternodeSync.lastMasternodeWinner);
         obj.pushKV("lastBudgetItem", masternodeSync.lastBudgetItem);
@@ -486,48 +488,6 @@ public:
 };
 #endif
 
-/*
-    Used for updating/reading spork settings on the network
-*/
-UniValue spork(const UniValue& params, bool fHelp)
-{
-    if (params.size() == 1 && params[0].get_str() == "show") {
-        UniValue ret(UniValue::VOBJ);
-        for (int nSporkID = SPORK_START; nSporkID <= SPORK_END; nSporkID++) {
-            if (sporkManager.GetSporkNameByID(nSporkID) != "Unknown")
-                ret.pushKV(sporkManager.GetSporkNameByID(nSporkID), GetSporkValue(nSporkID));
-        }
-        return ret;
-    } else if (params.size() == 1 && params[0].get_str() == "active") {
-        UniValue ret(UniValue::VOBJ);
-        for (int nSporkID = SPORK_START; nSporkID <= SPORK_END; nSporkID++) {
-            if (sporkManager.GetSporkNameByID(nSporkID) != "Unknown")
-                ret.pushKV(sporkManager.GetSporkNameByID(nSporkID), IsSporkActive(nSporkID));
-        }
-        return ret;
-    } else if (params.size() == 2) {
-        int nSporkID = sporkManager.GetSporkIDByName(params[0].get_str());
-        if (nSporkID == -1) {
-            return "Invalid spork name";
-        }
-
-        // SPORK VALUE
-        int64_t nValue = params[1].get_int();
-
-        //broadcast new spork
-        if (sporkManager.UpdateSpork(nSporkID, nValue)) {
-            return "success";
-        } else {
-            return "failure";
-        }
-    }
-
-    throw runtime_error(
-        "spork <name> [<value>]\n"
-        "<name> is the corresponding spork name, or 'show' to show all current spork settings, active to show which sporks are active"
-        "<value> is a epoch datetime to enable or disable spork" +
-        HelpRequiringPassphrase());
-}
 
 UniValue validateaddress(const UniValue& params, bool fHelp)
 {
@@ -1330,7 +1290,7 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
 UniValue getaddressbalance(const UniValue& params, bool fHelp)
 {
     std::string disabledMsg = "";
-    if (!(fExperimentalInsightExplorer || fExperimentalLightWalletd)) {
+    if (!(fAddressIndex || fExperimentalInsightExplorer || fExperimentalLightWalletd)) {
         disabledMsg = experimentalDisabledHelpMsg("getaddressbalance", {"insightexplorer", "lightwalletd"});
     }
     if (fHelp || params.size() != 1)
@@ -1572,7 +1532,6 @@ static const CRPCCommand commands[] =
     { "blockchain",         "getspentinfo",           &getspentinfo,           false }, /* insight explorer */
 
     { "masternode",         "mnsync",                 &mnsync,                 true  },
-    { "masternode",         "spork",                  &spork,                  true  },
 
     /* Not shown in help */
     { "hidden",             "setmocktime",            &setmocktime,            true  },

@@ -4,14 +4,15 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "activemasternode.h"
+#include "masternode/activemasternode.h"
 #include "db.h"
 #include "init.h"
 #include "main.h"
-#include "masternode-budget.h"
-#include "masternode-payments.h"
-#include "masternodeconfig.h"
-#include "masternodeman.h"
+//#include "masternode/masternode-budget.h"
+#include "masternode/masternode-payments.h"
+#include "masternode/masternodeconfig.h"
+#include "masternode/masternodeman.h"
+#include "masternode/masternode-sync.h"
 #include "rpc/server.h"
 #include "utilmoneystr.h"
 #include "key_io.h"
@@ -19,118 +20,6 @@
 #include <boost/tokenizer.hpp>
 
 #include <fstream>
-
-void SendMoney(const CTxDestination& address, CAmount nValue, CWalletTx& wtxNew, AvailableCoinsType coin_type = ALL_COINS)
-{
-    // Check amount
-    if (nValue <= 0)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid amount");
-
-    if (nValue > pwalletMain->GetBalance())
-        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
-
-    string strError;
-    if (pwalletMain->IsLocked()) {
-        strError = "Error: Wallet locked, unable to create transaction!";
-        LogPrintf("SendMoney() : %s", strError);
-        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-    }
-
-    // Parse SnowGem address
-    CScript scriptPubKey = GetScriptForDestination(address);
-
-    // Create and send the transaction
-    CReserveKey reservekey(pwalletMain);
-    CAmount nFeeRequired;
-    if (!pwalletMain->CreateTransaction(scriptPubKey, nValue, wtxNew, reservekey, nFeeRequired, strError, NULL, coin_type)) {
-        if (nValue + nFeeRequired > pwalletMain->GetBalance())
-            strError = strprintf("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!", FormatMoney(nFeeRequired));
-        LogPrintf("SendMoney() : %s\n", strError);
-        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-    }
-    if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
-        throw JSONRPCError(RPC_WALLET_ERROR, "Error: The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
-}
-
-UniValue obfuscation(const UniValue& params, bool fHelp)
-{
-    throw runtime_error("Obfuscation is not supported any more. Use Zerocoin\n");
-    
-    KeyIO keyIO(Params());
-
-    if (fHelp || params.size() == 0)
-        throw runtime_error(
-            "obfuscation <solarisaddress> <amount>\n"
-            "solarisaddress, reset, or auto (AutoDenominate)"
-            "<amount> is a real and will be rounded to the next 0.1" +
-            HelpRequiringPassphrase());
-
-    if (pwalletMain->IsLocked())
-        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
-
-    if (params[0].get_str() == "auto") {
-        if (fMasterNode)
-            return "ObfuScation is not supported from masternodes";
-
-        return "DoAutomaticDenominating " + (obfuScationPool.DoAutomaticDenominating() ? "successful" : ("failed: " + obfuScationPool.GetStatus()));
-    }
-
-    if (params[0].get_str() == "reset") {
-        obfuScationPool.Reset();
-        return "successfully reset obfuscation";
-    }
-
-    if (params.size() != 2)
-        throw runtime_error(
-            "obfuscation <solarisaddress> <amount>\n"
-            "solarisaddress, denominate, or auto (AutoDenominate)"
-            "<amount> is a real and will be rounded to the next 0.1" +
-            HelpRequiringPassphrase());
-
-    std::string strAddress = params[0].get_str();
-    CTxDestination dest = keyIO.DecodeDestination(strAddress);
-    if (!IsValidDestination(dest))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid SnowGem address");
-
-    // Amount
-    CAmount nAmount = AmountFromValue(params[1]);
-
-    // Wallet comments
-    CWalletTx wtx;
-    //    string strError = pwalletMain->SendMoneyToDestination(address.Get(), nAmount, wtx, ONLY_DENOMINATED);
-    SendMoney(dest, nAmount, wtx, ONLY_DENOMINATED);
-    //    if (strError != "")
-    //        throw JSONRPCError(RPC_WALLET_ERROR, strError);
-
-    return wtx.GetHash().GetHex();
-}
-
-UniValue getpoolinfo(const UniValue& params, bool fHelp)
-{
-    if (fHelp || params.size() != 0)
-        throw runtime_error(
-            "getpoolinfo\n"
-            "\nReturns anonymous pool-related information\n"
-
-            "\nResult:\n"
-            "{\n"
-            "  \"current\": \"addr\",    (string) SnowGem address of current masternode\n"
-            "  \"state\": xxxx,        (string) unknown\n"
-            "  \"entries\": xxxx,      (numeric) Number of entries\n"
-            "  \"accepted\": xxxx,     (numeric) Number of entries accepted\n"
-            "}\n"
-
-            "\nExamples:\n" +
-            HelpExampleCli("getpoolinfo", "") + HelpExampleRpc("getpoolinfo", ""));
-
-    UniValue obj(UniValue::VOBJ);
-    obj.pushKV("current_masternode", mnodeman.GetCurrentMasterNode()->addr.ToString());
-    obj.pushKV("state", obfuScationPool.GetState());
-    obj.pushKV("entries", obfuScationPool.GetEntriesCount());
-    obj.pushKV("entries_accepted", obfuScationPool.GetCountEntriesAccepted());
-    return obj;
-}
-
 
 UniValue listmasternodes(const UniValue& params, bool fHelp)
 {
@@ -154,7 +43,7 @@ UniValue listmasternodes(const UniValue& params, bool fHelp)
             "    \"txhash\": \"hash\",    (string) Collateral transaction hash\n"
             "    \"outidx\": n,         (numeric) Collateral transaction output index\n"
             "    \"status\": s,         (string) Status (ENABLED/EXPIRED/REMOVE/etc)\n"
-            "    \"addr\": \"addr\",      (string) Masternode SnowGem address\n"
+            "    \"addr\": \"addr\",      (string) Masternode BZEdge address\n"
             "    \"version\": v,        (numeric) Masternode protocol version\n"
             "    \"lastseen\": ttt,     (numeric) The time in seconds since epoch (Jan 1 1970 GMT) of the last seen\n"
             "    \"activetime\": ttt,   (numeric) The time in seconds since epoch (Jan 1 1970 GMT) masternode has been active\n"
@@ -291,7 +180,6 @@ UniValue getmasternodecount (const UniValue& params, bool fHelp)
             "{\n"
             "  \"total\": n,        (numeric) Total masternodes\n"
             "  \"stable\": n,       (numeric) Stable count\n"
-            "  \"obfcompat\": n,    (numeric) Obfuscation Compatible\n"
             "  \"enabled\": n,      (numeric) Enabled masternodes\n"
             "  \"inqueue\": n       (numeric) Masternodes in queue\n"
             "}\n"
@@ -309,7 +197,6 @@ UniValue getmasternodecount (const UniValue& params, bool fHelp)
 
     obj.pushKV("total", mnodeman.size());
     obj.pushKV("stable", mnodeman.stable_size());
-    obj.pushKV("obfcompat", mnodeman.CountEnabled(ActiveProtocol()));
     obj.pushKV("enabled", mnodeman.CountEnabled());
     obj.pushKV("inqueue", nCount);
     obj.pushKV("ipv4", ipv4);
@@ -628,7 +515,8 @@ UniValue getmasternodeoutputs (const UniValue& params, bool fHelp)
     vector<COutput> possibleCoins = activeMasternode.SelectCoinsMasternode();
 
     UniValue ret(UniValue::VARR);
-    BOOST_FOREACH (COutput& out, possibleCoins) {
+    for (COutput& out : possibleCoins)
+    {
         UniValue obj(UniValue::VOBJ);
         obj.pushKV("txhash", out.tx->GetHash().ToString());
         obj.pushKV("outputidx", out.i);
@@ -715,7 +603,7 @@ UniValue getmasternodestatus (const UniValue& params, bool fHelp)
             "  \"txhash\": \"xxxx\",      (string) Collateral transaction hash\n"
             "  \"outputidx\": n,        (numeric) Collateral transaction output index number\n"
             "  \"netaddr\": \"xxxx\",     (string) Masternode network address\n"
-            "  \"addr\": \"xxxx\",        (string) SnowGem address for masternode payments\n"
+            "  \"addr\": \"xxxx\",        (string) BZEdge address for masternode payments\n"
             "  \"status\": \"xxxx\",      (string) Masternode status\n"
             "  \"message\": \"xxxx\"      (string) Masternode status message\n"
             "}\n"
@@ -758,7 +646,7 @@ UniValue getmasternodewinners (const UniValue& params, bool fHelp)
             "  {\n"
             "    \"nHeight\": n,           (numeric) block height\n"
             "    \"winner\": {\n"
-            "      \"address\": \"xxxx\",    (string) SnowGem MN Address\n"
+            "      \"address\": \"xxxx\",    (string) BZEdge MN Address\n"
             "      \"nVotes\": n,          (numeric) Number of votes for winner\n"
             "    }\n"
             "  }\n"
@@ -771,7 +659,7 @@ UniValue getmasternodewinners (const UniValue& params, bool fHelp)
             "    \"nHeight\": n,           (numeric) block height\n"
             "    \"winner\": [\n"
             "      {\n"
-            "        \"address\": \"xxxx\",  (string) SnowGem MN Address\n"
+            "        \"address\": \"xxxx\",  (string) BZEdge MN Address\n"
             "        \"nVotes\": n,        (numeric) Number of votes for winner\n"
             "      }\n"
             "      ,...\n"
@@ -812,7 +700,8 @@ UniValue getmasternodewinners (const UniValue& params, bool fHelp)
             UniValue winner(UniValue::VARR);
             boost::char_separator<char> sep(",");
             boost::tokenizer< boost::char_separator<char> > tokens(strPayment, sep);
-            BOOST_FOREACH (const string& t, tokens) {
+            for (const string& t : tokens)
+            {
                 UniValue addr(UniValue::VOBJ);
                 std::size_t pos = t.find(":");
                 std::string strAddress = t.substr(0,pos);
@@ -838,7 +727,7 @@ UniValue getmasternodewinners (const UniValue& params, bool fHelp)
             obj.pushKV("winner", winner);
         }
 
-            ret.push_back(obj);
+        ret.push_back(obj);
     }
 
     return ret;
@@ -884,7 +773,8 @@ UniValue getmasternodescores (const UniValue& params, bool fHelp)
     for (int height = nHeight; height < chainActive.Tip()->nHeight + 20; height++) {
         arith_uint256 nHigh = 0;
         CMasternode* pBestMasternode = NULL;
-        BOOST_FOREACH (CMasternode& mn, vMasternodes) {
+        for (CMasternode& mn : vMasternodes)
+        {
             arith_uint256 n = mn.CalculateScore(blockHash);
             if (n > nHigh) {
                 nHigh = n;
@@ -898,7 +788,7 @@ UniValue getmasternodescores (const UniValue& params, bool fHelp)
     return obj;
 }
 
-// This command is retained for backwards compatibility, but is depreciated.
+// This command is retained for backwards compatibility, but is deprecated.
 // Future removal of this command is planned to keep things clean.
 UniValue masternode(const UniValue& params, bool fHelp)
 {
@@ -1162,8 +1052,6 @@ UniValue rewardactivemns(const UniValue& params, bool fHelp)
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
-    { "masternode",         "obfuscation",          &obfuscation,         true  },
-    { "masternode",         "getpoolinfo",          &getpoolinfo,         true  },
     { "masternode",         "masternode",           &masternode,          true  },
     { "masternode",         "listmasternodes",      &listmasternodes,     true  },
     { "masternode",         "rewardactivemns",      &rewardactivemns,     true  },

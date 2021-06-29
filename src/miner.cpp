@@ -20,7 +20,7 @@
 #include "key_io.h"
 #include "main.h"
 #include "metrics.h"
-#include "masternode-sync.h"
+#include "masternode/masternode-sync.h"
 #include "net.h"
 #include "zcash/Note.hpp"
 #include "policy/policy.h"
@@ -33,8 +33,9 @@
 #include "util.h"
 #include "utilmoneystr.h"
 #include "validationinterface.h"
-#include "masternode-payments.h"
-#include "spork.h"
+#include "masternode/masternode-payments.h"
+#include "masternode/masternodeman.h"
+//#include "masternode/spork.h"
 
 #include <librustzcash.h>
 

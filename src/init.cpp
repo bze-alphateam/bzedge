@@ -8,7 +8,7 @@
 #endif
 
 #include "init.h"
-#include "activemasternode.h"
+#include "masternode/activemasternode.h"
 #include "addrman.h"
 #include "amount.h"
 #include "checkpoints.h"
@@ -24,10 +24,10 @@
 #include "key_io.h"
 #endif
 #include "main.h"
-#include "masternode-budget.h"
-#include "masternode-payments.h"
-#include "masternodeconfig.h"
-#include "masternodeman.h"
+//#include "masternode/masternode-budget.h"
+#include "masternode/masternode-payments.h"
+#include "masternode/masternodeconfig.h"
+#include "masternode/masternodeman.h"
 #include "mempool_limit.h"
 #include "metrics.h"
 #include "miner.h"
@@ -37,8 +37,8 @@
 #include "rpc/register.h"
 #include "script/standard.h"
 #include "script/sigcache.h"
-#include "spork.h"
-#include "sporkdb.h"
+//#include "masternode/spork.h"
+//#include "masternode/sporkdb.h"
 #include "scheduler.h"
 #include "txdb.h"
 #include "torcontrol.h"
@@ -71,9 +71,10 @@
 #include "zmq/zmqnotificationinterface.h"
 #endif
 
+#include <rust/metrics.h>
+
 #include "librustzcash.h"
 
-using namespace std;
 using namespace boost::placeholders;
 
 extern void ThreadSendAlert();
@@ -139,9 +140,21 @@ CClientUIInterface uiInterface; // Declared but not defined in ui_interface.h
 
 std::atomic<bool> fRequestShutdown(false);
 
+#ifdef WIN32
+/** On windows it is possible to simply use a condition variable. */
+std::mutex g_shutdown_mutex;
+std::condition_variable g_shutdown_cv;
+#endif
+
 void StartShutdown()
 {
+#ifdef WIN32
+    std::unique_lock<std::mutex> lk(g_shutdown_mutex);
     fRequestShutdown = true;
+    g_shutdown_cv.notify_one();
+#else
+    fRequestShutdown = true;
+#endif
 }
 bool ShutdownRequested()
 {
@@ -213,7 +226,6 @@ void Shutdown()
     StopNode();
     StopTorControl();
     DumpMasternodes();
-    DumpBudgets();
     DumpMasternodePayments();
     UnregisterNodeSignals(GetNodeSignals());
 
@@ -241,8 +253,6 @@ void Shutdown()
         pcoinsdbview = NULL;
         delete pblocktree;
         pblocktree = NULL;
-        delete pSporkDB;
-        pSporkDB = NULL;
     }
 #ifdef ENABLE_WALLET
     if (pwalletMain)
@@ -280,15 +290,35 @@ void Shutdown()
 /**
  * Signal handlers are very limited in what they are allowed to do, so:
  */
+#ifndef WIN32
 void HandleSIGTERM(int)
 {
-    fRequestShutdown = true;
+    StartShutdown();
 }
 
 void HandleSIGHUP(int)
 {
     fReopenDebugLog = true;
 }
+#else
+static BOOL WINAPI consoleCtrlHandler(DWORD dwCtrlType)
+{
+    StartShutdown();
+    Sleep(INFINITE);
+    return true;
+}
+#endif
+
+#ifndef WIN32
+static void registerSignalHandler(int signal, void(*handler)(int))
+{
+    struct sigaction sa;
+    sa.sa_handler = handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    sigaction(signal, &sa, nullptr);
+}
+#endif
 
 bool static InitError(const std::string &str)
 {
@@ -323,10 +353,10 @@ void OnRPCStopped()
 void OnRPCPreCommand(const CRPCCommand& cmd)
 {
     // Observe safe mode
-    string strWarning = GetWarnings("rpc").first;
+    std::string strWarning = GetWarnings("rpc").first;
     if (strWarning != "" && !GetBoolArg("-disablesafemode", DEFAULT_DISABLE_SAFEMODE) &&
         !cmd.okSafeMode)
-        throw JSONRPCError(RPC_FORBIDDEN_BY_SAFE_MODE, string("Safe mode: ") + strWarning);
+        throw JSONRPCError(RPC_FORBIDDEN_BY_SAFE_MODE, std::string("Safe mode: ") + strWarning);
 }
 
 std::string HelpMessage(HelpMessageMode mode)
@@ -336,11 +366,13 @@ std::string HelpMessage(HelpMessageMode mode)
     // When adding new options to the categories, please keep and ensure alphabetical ordering.
     // Do not translate _(...) -help-debug options, many technical terms, and only a very small audience, so is unnecessary stress to translators
 
-    string strUsage = HelpMessageGroup(_("Options:"));
+    std::string strUsage = HelpMessageGroup(_("Options:"));
     strUsage += HelpMessageOpt("-?", _("This help message"));
     strUsage += HelpMessageOpt("-alerts", strprintf(_("Receive and display P2P network alerts (default: %u)"), DEFAULT_ALERTS));
     strUsage += HelpMessageOpt("-alertnotify=<cmd>", _("Execute command when a relevant alert is received or we see a really long fork (%s in cmd is replaced by message)"));
     strUsage += HelpMessageOpt("-blocknotify=<cmd>", _("Execute command when the best block changes (%s in cmd is replaced by block hash)"));
+    if (showDebug)
+        strUsage += HelpMessageOpt("-blocksonly", strprintf(_("Whether to reject transactions from network peers. Automatic broadcast and rebroadcast of any transactions from inbound peers is disabled, unless '-whitelistforcerelay' is '1', in which case whitelisted peers' transactions will be relayed. RPC transactions are not affected. (default: %u)"), DEFAULT_BLOCKSONLY));
     strUsage += HelpMessageOpt("-checkblocks=<n>", strprintf(_("How many blocks to check at startup (default: %u, 0 = all)"), DEFAULT_CHECKBLOCKS));
     strUsage += HelpMessageOpt("-checklevel=<n>", strprintf(_("How thorough the block verification of -checkblocks is (0-4, default: %u)"), DEFAULT_CHECKLEVEL));
     strUsage += HelpMessageOpt("-conf=<file>", strprintf(_("Specify configuration file (default: %s)"), BITCOIN_CONF_FILENAME));
@@ -408,6 +440,8 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-whitebind=<addr>", _("Bind to given address and whitelist peers connecting to it. Use [host]:port notation for IPv6"));
     strUsage += HelpMessageOpt("-whitelist=<netmask>", _("Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.") +
         " " + _("Whitelisted peers cannot be DoS banned and their transactions are always relayed, even if they are already in the mempool, useful e.g. for a gateway"));
+    strUsage += HelpMessageOpt("-whitelistrelay", strprintf(_("Accept relayed transactions received from whitelisted inbound peers even when not relaying transactions (default: %d)"), DEFAULT_WHITELISTRELAY));
+    strUsage += HelpMessageOpt("-whitelistforcerelay", strprintf(_("Force relay of transactions from whitelisted inbound peers even they violate local relay policy (default: %d)"), DEFAULT_WHITELISTFORCERELAY));
     strUsage += HelpMessageOpt("-maxuploadtarget=<n>", strprintf(_("Tries to keep outbound traffic under the given target (in MiB per 24h), 0 = no limit (default: %d)"), DEFAULT_MAX_UPLOAD_TARGET));
 
 #ifdef ENABLE_WALLET
@@ -422,6 +456,15 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-zmqpubrawtx=<address>", _("Enable publish raw transaction in <address>"));
 #endif
 
+    strUsage += HelpMessageGroup(_("Monitoring options:"));
+    strUsage += HelpMessageOpt("-metricsallowip=<ip>", _("Allow metrics connections from specified source. "
+            "Valid for <ip> are a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0) or a network/CIDR (e.g. 1.2.3.4/24). "
+            "This option can be specified multiple times. (default: only localhost)"));
+    strUsage += HelpMessageOpt("-metricsbind=<addr>", _("Bind to given address to listen for metrics connections. (default: bind to all interfaces)"));
+    strUsage += HelpMessageOpt("-prometheusport=<port>", _("Expose node metrics in the Prometheus exposition format. "
+            "An HTTP listener will be started on <port>, which responds to GET requests on any request path. "
+            "Use -metricsallowip and -metricsbind to control access."));
+
     strUsage += HelpMessageGroup(_("Debugging/Testing options:"));
     if (showDebug)
     {
@@ -434,8 +477,13 @@ std::string HelpMessage(HelpMessageMode mode)
         strUsage += HelpMessageOpt("-nuparams=hexBranchId:activationHeight", "Use given activation height for specified network upgrade (regtest-only)");
         strUsage += HelpMessageOpt("-nurejectoldversions", strprintf("Reject peers that don't know about the current epoch (regtest-only) (default: %u)", DEFAULT_NU_REJECT_OLD_VERSIONS));
     }
-    string debugCategories = "addrman, alert, bench, coindb, db, estimatefee, http, libevent, lock, mempool, net, partitioncheck, pow, proxy, prune, "
-                             "rand, receiveunsafe, reindex, rpc, selectcoins, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
+#ifdef BZE_WITNESS
+    std::string debugCategories = "addrman, alert, bench, coindb, db, deletetx, estimatefee, http, libevent, lock, mempool, net, masternode, partitioncheck, paymentdisclosure, pow, proxy, prune, "
+                             "rand, receiveunsafe, reindex, rpc, selectcoins, swiftx, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
+#else
+    std::string debugCategories = "addrman, alert, bench, coindb, db, estimatefee, http, libevent, lock, mempool, net, masternode, partitioncheck, paymentdisclosure, pow, proxy, prune, "
+                             "rand, receiveunsafe, reindex, rpc, selectcoins, swiftx, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
+#endif // BZE_WITNESS
     strUsage += HelpMessageOpt("-debug=<category>", strprintf(_("Output debugging information (default: %u, supplying <category> is optional)"), 0) + ". " +
         _("If <category> is not supplied or if <category> = 1, output all debugging information.") + " " + _("<category> can be:") + " " + debugCategories + ". " +
         _("For multiple specific categories use -debug=<category> multiple times."));
@@ -443,15 +491,6 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-help-debug", _("Show all debugging options (usage: --help -help-debug)"));
     strUsage += HelpMessageOpt("-logips", strprintf(_("Include IP addresses in debug output (default: %u)"), DEFAULT_LOGIPS));
     strUsage += HelpMessageOpt("-logtimestamps", strprintf(_("Prepend debug output with timestamp (default: %u)"), DEFAULT_LOGTIMESTAMPS));
-strUsage += HelpMessageGroup(_("DarkSend options:"));
-    strUsage += HelpMessageOpt("-enablezcashsend=<n>",strprintf(_("Enable use of automated darksend for funds stored in this wallet (0-1, default: %u)"), 0));
-    strUsage += HelpMessageOpt("-zcashsendrounds=<n>",strprintf(_("Use N separate masternodes to anonymize funds  (2-8, default: %u)"), 2));
-    strUsage += HelpMessageOpt("-anonymizezcashamount=<n>",strprintf(_("Keep N ZCASH anonymized (default: %u)"), 0));
-    strUsage += HelpMessageOpt("-liquidityprovider=<n>",strprintf(_("Provide liquidity to Darksend by infrequently mixing coins on a continual basis (0-100, default: %u, 1=very frequent, high fees, 100=very infrequent, low fees)"), 0));
-
-    strUsage += HelpMessageGroup(_("SwiftX options:"));
-    strUsage += HelpMessageOpt("-enableswifttx=<n>", strprintf(_("Enable SwiftX, show confirmations for locked transactions (bool, default: %s)"), "true"));
-    strUsage += HelpMessageOpt("-swifttxdepth=<n>", strprintf(_("Show N confirmations for a successfully locked transaction (0-9999, default: %u)"), nSwiftTXDepth));
 
     if (showDebug)
     {
@@ -578,7 +617,7 @@ struct CImportingNow
 void CleanupBlockRevFiles()
 {
     using namespace fs;
-    map<string, path> mapBlockFiles;
+    std::map<std::string, path> mapBlockFiles;
 
     // Glob all blk?????.dat and rev?????.dat files from the blocks directory.
     // Remove the rev files immediately and insert the blk file paths into an
@@ -602,7 +641,7 @@ void CleanupBlockRevFiles()
     // keeping a separate counter.  Once we hit a gap (or if 0 doesn't exist)
     // start removing block files.
     int nContigCounter = 0;
-    for (const std::pair<string, path>& item : mapBlockFiles) {
+    for (const std::pair<std::string, path>& item : mapBlockFiles) {
         if (atoi(item.first) == nContigCounter) {
             nContigCounter++;
             continue;
@@ -825,6 +864,22 @@ void InitParameterInteraction()
         if (SoftSetBoolArg("-rescan", true))
             LogPrintf("%s: parameter interaction: -zapwallettxes=<mode> -> setting -rescan=1\n", __func__);
     }
+
+    // disable walletbroadcast and whitelistrelay in blocksonly mode
+    if (GetBoolArg("-blocksonly", DEFAULT_BLOCKSONLY)) {
+        if (SoftSetBoolArg("-whitelistrelay", false))
+            LogPrintf("%s: parameter interaction: -blocksonly=1 -> setting -whitelistrelay=0\n", __func__);
+#ifdef ENABLE_WALLET
+        if (SoftSetBoolArg("-walletbroadcast", false))
+            LogPrintf("%s: parameter interaction: -blocksonly=1 -> setting -walletbroadcast=0\n", __func__);
+#endif
+    }
+
+    // Forcing relay from whitelisted hosts implies we will accept relays from them in the first place.
+    if (GetBoolArg("-whitelistforcerelay", DEFAULT_WHITELISTFORCERELAY)) {
+        if (SoftSetBoolArg("-whitelistrelay", true))
+            LogPrintf("%s: parameter interaction: -whitelistforcerelay=1 -> setting -whitelistrelay=1\n", __func__);
+    }
 }
 
 void InitLogging()
@@ -887,16 +942,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 #endif
 #ifdef WIN32
     // Enable Data Execution Prevention (DEP)
-    // Minimum supported OS versions: WinXP SP3, WinVista >= SP1, Win Server 2008
-    // A failure is non-critical and needs no further attention!
-#ifndef PROCESS_DEP_ENABLE
-    // We define this here, because GCCs winbase.h limits this to _WIN32_WINNT >= 0x0601 (Windows 7),
-    // which is not correct. Can be removed, when GCCs winbase.h is fixed!
-#define PROCESS_DEP_ENABLE 0x00000001
-#endif
-    typedef BOOL (WINAPI *PSETPROCDEPPOL)(DWORD);
-    PSETPROCDEPPOL setProcDEPPol = (PSETPROCDEPPOL)GetProcAddress(GetModuleHandleA("Kernel32.dll"), "SetProcessDEPPolicy");
-    if (setProcDEPPol != NULL) setProcDEPPol(PROCESS_DEP_ENABLE);
+    SetProcessDEPPolicy(PROCESS_DEP_ENABLE);
 #endif
 
     if (!SetupNetworking())
@@ -931,12 +977,16 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // Ignore SIGPIPE, otherwise it will bring the daemon down if the client closes unexpectedly
     signal(SIGPIPE, SIG_IGN);
+#else
+    SetConsoleCtrlHandler(consoleCtrlHandler, true);
 #endif
 
     std::set_new_handler(new_handler_terminate);
 
     // ********************************************************* Step 2: parameter interactions
     const CChainParams& chainparams = Params();
+
+    // also see: InitParameterInteraction()
 
     // Set this early so that experimental features are correctly enabled/disabled
     auto err = InitExperimentalMode();
@@ -954,7 +1004,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
 #endif
     }
-    
+
     // Make sure enough file descriptors are available
     int nBind = std::max((int)mapArgs.count("-bind") + (int)mapArgs.count("-whitebind"), 1);
     int nUserMaxConnections = GetArg("-maxconnections", DEFAULT_MAX_PEER_CONNECTIONS);
@@ -982,17 +1032,29 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     fDebug = !mapMultiArgs["-debug"].empty();
     // Special-case: if -debug=0/-nodebug is set, turn off debugging messages
-    const vector<string>& categories = mapMultiArgs["-debug"];
-    if (GetBoolArg("-nodebug", false) || find(categories.begin(), categories.end(), string("0")) != categories.end())
+    const std::vector<std::string>& categories = mapMultiArgs["-debug"];
+    if (GetBoolArg("-nodebug", false) || find(categories.begin(), categories.end(), std::string("0")) != categories.end())
         fDebug = false;
 
     // Special case: if debug=zrpcunsafe, implies debug=zrpc, so add it to debug categories
-    if (find(categories.begin(), categories.end(), string("zrpcunsafe")) != categories.end()) {
-        if (find(categories.begin(), categories.end(), string("zrpc")) == categories.end()) {
+    if (find(categories.begin(), categories.end(), std::string("zrpcunsafe")) != categories.end()) {
+        if (find(categories.begin(), categories.end(), std::string("zrpc")) == categories.end()) {
             LogPrintf("%s: parameter interaction: setting -debug=zrpcunsafe -> -debug=zrpc\n", __func__);
-            vector<string>& v = mapMultiArgs["-debug"];
+            std::vector<std::string>& v = mapMultiArgs["-debug"];
             v.push_back("zrpc");
         }
+    }
+
+    if (fDebug)
+    {
+        for (const std::string& dc : categories)
+        {
+            LogPrintf("Debug log enabled for category \"%s\"\n", dc);
+        }
+    }
+    else
+    {
+        LogPrintf("Debug log disabled.\n");
     }
 
     // Check for -debugnet
@@ -1115,7 +1177,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (chainparams.NetworkIDString() != "regtest") {
             return InitError("Network upgrade parameters may only be overridden on regtest.");
         }
-        const vector<string>& deployments = mapMultiArgs["-nuparams"];
+        const std::vector<std::string>& deployments = mapMultiArgs["-nuparams"];
         for (auto i : deployments) {
             std::vector<std::string> vDeploymentParams;
             boost::split(vDeploymentParams, i, boost::is_any_of(":"));
@@ -1202,18 +1264,40 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             threadGroup.create_thread(&ThreadScriptCheck);
     }
 
-    if (mapArgs.count("-sporkkey")) // spork priv key
-    {
-        if (!sporkManager.SetPrivKey(GetArg("-sporkkey", "")))
-            return InitError(_("Unable to sign spork message, wrong key?"));
-    }
-
     // Start the lightweight task scheduler thread
     CScheduler::Function serviceLoop = boost::bind(&CScheduler::serviceQueue, &scheduler);
     threadGroup.create_thread(boost::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
 
     // Count uptime
     MarkStartTime();
+
+    int prometheusPort = GetArg("-prometheusport", -1);
+    if (prometheusPort > 0) {
+        const std::vector<std::string>& vAllow = mapMultiArgs["-metricsallowip"];
+        std::vector<const char*> vAllowCstr;
+        for (const std::string& strAllow : vAllow) {
+            vAllowCstr.push_back(strAllow.c_str());
+        }
+
+        std::string metricsBind = GetArg("-metricsbind", "");
+        const char* metricsBindCstr = nullptr;
+        if (!metricsBind.empty()) {
+            metricsBindCstr = metricsBind.c_str();
+        }
+
+        // Start up the metrics runtime. This spins off a Rust thread that runs
+        // the Prometheus exporter. We just let this thread die at process end.
+        LogPrintf("metrics thread start");
+        if (!metrics_run(metricsBindCstr, vAllowCstr.data(), vAllowCstr.size(), prometheusPort)) {
+            return InitError(strprintf(_("Failed to start Prometheus metrics exporter")));
+        }
+    }
+
+    // Expose binary metadata to metrics, using a single time series with value 1.
+    // https://www.robustperception.io/exposing-the-software-version-to-prometheus
+    MetricsIncrementCounter(
+        "zcashd.build.info",
+        "version", CLIENT_BUILD.c_str());
 
     if ((chainparams.NetworkIDString() != "regtest") &&
             GetBoolArg("-showmetrics", isatty(STDOUT_FILENO)) &&
@@ -1253,7 +1337,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // sanitize comments per BIP-0014, format user agent and check total size
     std::vector<string> uacomments;
-    for (string cmt : mapMultiArgs["-uacomment"])
+    for (std::string cmt : mapMultiArgs["-uacomment"])
     {
         if (cmt != SanitizeString(cmt, SAFE_CHARS_UA_COMMENT))
             return InitError(strprintf("User Agent comment (%s) contains unsafe characters.", cmt));
@@ -1428,9 +1512,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 delete pcoinsdbview;
                 delete pcoinscatcher;
                 delete pblocktree;
-                delete pSporkDB;
 
-                pSporkDB = new CSporkDB(0, false, false);
                 pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex);
                 pcoinsdbview = new CCoinsViewDB(nCoinDBCache, false, fReindex);
                 pcoinscatcher = new CCoinsViewErrorCatcher(pcoinsdbview);
@@ -1442,10 +1524,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     if (fPruneMode)
                         CleanupBlockRevFiles();
                 }
-
-				// SnowGem: load previous sessions sporks if we have them.
-                // uiInterface.InitMessage(_("Loading sporks..."));
-                LoadSporksFromDB();
 
                 if (!LoadBlockIndex()) {
                     strLoadError = _("Error loading block database");
@@ -1718,6 +1796,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             LogPrintf("file format is unknown or invalid, please fix it manually\n");
     }
 
+    /*
     uiInterface.InitMessage(_("Loading budget cache..."));
 
     CBudgetDB budgetdb;
@@ -1736,7 +1815,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     //flag our cached items so we send them to our peers
     budget.ResetSync();
     budget.ClearSeen();
-
+*/
 
     uiInterface.InitMessage(_("Loading masternode payment cache..."));
 
@@ -1780,7 +1859,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             CKey key;
             CPubKey pubkey;
 
-            if (!obfuScationSigner.SetKey(strMasterNodePrivKey, errorMessage, key, pubkey)) {
+            if (!mnSigner.SetKey(strMasterNodePrivKey, errorMessage, key, pubkey)) {
                 return InitError(_("Invalid masternodeprivkey. Please see documenation."));
             }
 
@@ -1792,7 +1871,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
 
     //get the mode of budget voting for this masternode
-    strBudgetMode = GetArg("-budgetvotemode", "auto");
+    //strBudgetMode = GetArg("-budgetvotemode", "auto");
 
     if (GetBoolArg("-mnconflock", true) && pwalletMain) {
         LOCK(pwalletMain->cs_wallet);
@@ -1812,61 +1891,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 			}
 		}
     }
-    fEnableZcashSend = GetBoolArg("-enablezcashsend", false);
 
-    nZcashSendRounds = GetArg("-zcashsendrounds", 10);
-    if (nZcashSendRounds > 100) nZcashSendRounds = 100;
-    if (nZcashSendRounds < 10) nZcashSendRounds = 10;
+    mnodeman.InitCollateralAddress();
 
-    nLiquidityProvider = GetArg("-liquidityprovider", 0); //0-100
-    if(nLiquidityProvider != 0) {
-        obfuScationPool.SetMinBlockSpacing(std::min(nLiquidityProvider,100)*15);
-        fEnableZcashSend = true;
-        nZcashSendRounds = 99999;
-    }
-
-    nAnonymizeZcashAmount = GetArg("-anonymizezcashamount", 0);
-    if (nAnonymizeZcashAmount > 999999) nAnonymizeZcashAmount = 999999;
-    if (nAnonymizeZcashAmount < 2) nAnonymizeZcashAmount = 2;
-
-    //lite mode disables all Masternode and Obfuscation related functionality
-    fLiteMode = GetBoolArg("-litemode", false);
-    if (fMasterNode && fLiteMode) {
-        return InitError("You can not start a masternode in litemode");
-    }
-
-    fEnableSwiftTX = GetBoolArg("-enableswifttx", fEnableSwiftTX);
-    nSwiftTXDepth = GetArg("-swifttxdepth", nSwiftTXDepth);
-    nSwiftTXDepth = std::min(std::max(nSwiftTXDepth, 0), 60);
-
-    LogPrintf("fLiteMode %d\n", fLiteMode);
-    LogPrintf("nSwiftTXDepth %d\n", nSwiftTXDepth);
-    LogPrintf("Budget Mode %s\n", strBudgetMode.c_str());
-    LogPrintf("Zcash send rounds %d\n", nZcashSendRounds);
-    LogPrintf("Anonymize Zcash Amount %d\n", nAnonymizeZcashAmount);
-    /* Denominations
-
-       A note about convertability. Within Obfuscation pools, each denomination
-       is convertable to another.
-
-       For example:
-       1XLR+1000 == (.1XLR+100)*10
-       10XLR+10000 == (1XLR+1000)*10
-    */
-    obfuScationDenominations.push_back((10000 * COIN) + 10000000);
-    obfuScationDenominations.push_back((1000 * COIN) + 1000000);
-    obfuScationDenominations.push_back((100 * COIN) + 100000);
-    obfuScationDenominations.push_back((10 * COIN) + 10000);
-    obfuScationDenominations.push_back((1 * COIN) + 1000);
-    obfuScationDenominations.push_back((.1 * COIN) + 100);
-    /* Disabled till we need them
-    obfuScationDenominations.push_back( (.01      * COIN)+10 );
-    obfuScationDenominations.push_back( (.001     * COIN)+1 );
-    */
-
-    obfuScationPool.InitCollateralAddress();
-
-    threadGroup.create_thread(boost::bind(&ThreadCheckObfuScationPool));
+    threadGroup.create_thread(boost::bind(&ThreadMNWatchdog));
 
 
     

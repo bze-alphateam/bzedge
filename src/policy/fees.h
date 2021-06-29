@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-static const CAmount DEFAULT_FEE = 1000;
+static const CAmount DEFAULT_FEE = 10000;
 
 class CAutoFile;
 class CFeeRate;

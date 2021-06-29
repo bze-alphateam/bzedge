@@ -336,7 +336,6 @@ BOOST_AUTO_TEST_CASE(rpc_wallet)
     bool canopyEnabled =
         Params().GetConsensus().vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight != Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
-    // slow start + blossom activation + (pre blossom halving - blossom activation) * 2
     BOOST_CHECK_NO_THROW(retValue = CallRPC("getblocksubsidy 1046400"));
     obj = retValue.get_obj();
     BOOST_CHECK_EQUAL(find_value(obj, "miner").get_real(), canopyEnabled ? 2.5 : 3.125);
@@ -2152,19 +2151,9 @@ BOOST_AUTO_TEST_CASE(rpc_gettransaction_status_sapling)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    TestWTxStatus(RegtestActivateSapling(), DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA);
+    TestWTxStatus(RegtestActivateSapling(), DEFAULT_TX_EXPIRY_DELTA);
 
     RegtestDeactivateSapling();
-}
-
-BOOST_AUTO_TEST_CASE(rpc_gettransaction_status_blossom)
-{
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    auto params = RegtestActivateBlossom(true).GetConsensus();
-
-    TestWTxStatus(params, DEFAULT_POST_BLOSSOM_TX_EXPIRY_DELTA);
-
-    RegtestDeactivateBlossom();
 }
 
 

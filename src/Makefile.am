@@ -121,7 +121,7 @@ LIBZCASH_H = \
 .PHONY: FORCE cargo-build check-symbols check-security
 # bitcoin core #
 BITCOIN_CORE_H = \
-  activemasternode.h \
+  masternode/activemasternode.h \
   addrdb.h \
   addressindex.h \
   addrman.h \
@@ -153,8 +153,6 @@ BITCOIN_CORE_H = \
   consensus/validation.h \
   core_io.h \
   core_memusage.h \
-  obfuscation.h \
-  obfuscation-relay.h \
   deprecation.h \
   experimental_features.h \
   fs.h \
@@ -162,7 +160,7 @@ BITCOIN_CORE_H = \
   httprpc.h \
   httpserver.h \
   init.h \
-  swifttx.h \
+  masternode/swifttx.h \
   key.h \
   key_constants.h \
   key_io.h \
@@ -172,16 +170,14 @@ BITCOIN_CORE_H = \
   logging.h \
   main.h \
   memusage.h \
-  masternode.h \
-  masternode-payments.h \
-  masternode-budget.h \
-  masternode-sync.h \
-  masternodeman.h \
-  masternodeconfig.h \
+  masternode/masternode.h \
+  masternode/masternode-payments.h \
+  masternode/masternode-sync.h \
+  masternode/masternodeman.h \
+  masternode/masternodeconfig.h \
   merkleblock.h \
   metrics.h \
   miner.h \
-  mruset.h \
   net.h \
   netbase.h \
   noui.h \
@@ -211,8 +207,6 @@ BITCOIN_CORE_H = \
   script/ismine.h \
   serialize.h \
   spentindex.h \
-  spork.h \
-  sporkdb.h \
   streams.h \
   support/allocators/secure.h \
   support/allocators/zeroafterfree.h \
@@ -243,6 +237,7 @@ BITCOIN_CORE_H = \
   wallet/asyncrpcoperation_common.h \
   wallet/asyncrpcoperation_mergetoaddress.h \
   wallet/asyncrpcoperation_saplingmigration.h \
+  wallet/asyncrpcoperation_saplingconsolidation.h \
   wallet/asyncrpcoperation_sendmany.h \
   wallet/asyncrpcoperation_shieldcoinbase.h \
   wallet/crypter.h \
@@ -297,7 +292,6 @@ libbitcoin_server_a_SOURCES = \
   rest.cpp \
   rpc/blockchain.cpp \
   rpc/masternode.cpp \
-  rpc/masternode-budget.cpp \
   rpc/mining.cpp \
   rpc/misc.cpp \
   rpc/net.cpp \
@@ -305,7 +299,6 @@ libbitcoin_server_a_SOURCES = \
   rpc/server.cpp \
   script/sigcache.cpp \
   script/ismine.cpp \
-  sporkdb.cpp \
   timedata.cpp \
   torcontrol.cpp \
   txdb.cpp \
@@ -328,25 +321,22 @@ endif
 libbitcoin_wallet_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_wallet_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_wallet_a_SOURCES = \
-  activemasternode.cpp \
-  obfuscation.cpp \
-  obfuscation-relay.cpp \
+  masternode/activemasternode.cpp \
   zcbenchmarks.cpp \
   zcbenchmarks.h \
   wallet/asyncrpcoperation_common.cpp \
   wallet/asyncrpcoperation_mergetoaddress.cpp \
   wallet/asyncrpcoperation_saplingmigration.cpp \
+  wallet/asyncrpcoperation_saplingconsolidation.cpp \
   wallet/asyncrpcoperation_sendmany.cpp \
   wallet/asyncrpcoperation_shieldcoinbase.cpp \
   wallet/crypter.cpp \
   wallet/db.cpp \
-  swifttx.cpp \
-  masternode.cpp \
-  masternode-budget.cpp \
-  masternode-payments.cpp \
-  masternode-sync.cpp \
-  masternodeconfig.cpp \
-  masternodeman.cpp \
+  masternode/masternode.cpp \
+  masternode/masternode-payments.cpp \
+  masternode/masternode-sync.cpp \
+  masternode/masternodeconfig.cpp \
+  masternode/masternodeman.cpp \
   wallet/paymentdisclosure.cpp \
   wallet/paymentdisclosuredb.cpp \
   wallet/rpcdisclosure.cpp \
@@ -425,8 +415,6 @@ libbitcoin_common_a_SOURCES = \
   script/script_error.cpp \
   script/sign.cpp \
   script/standard.cpp \
-  spork.cpp \
-  sporkdb.cpp \
   transaction_builder.cpp \
   utiltest.cpp \
   warnings.cpp \

@@ -23,6 +23,7 @@
 #include <string>
 #ifdef WIN32
 #include <io.h>
+#include <wincon.h>
 #else
 #include <sys/ioctl.h>
 #endif
@@ -622,8 +623,6 @@ int printInitMessage()
 }
 
 #ifdef WIN32
-#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
-
 bool enableVTMode()
 {
     // Set output mode to handle virtual terminal sequences
@@ -726,11 +725,7 @@ void ThreadShowMetricsScreen()
         if (isScreen) {
             // Explain how to exit
             std::cout << "[";
-#ifdef WIN32
-            std::cout << strprintf(_("'%s.exe stop' to exit"), COIN_CLI_EXECUTABLE.c_str());
-#else
             std::cout << _("Press Ctrl+C to exit");
-#endif
             std::cout << "] [" << _("Set 'showmetrics=0' to hide") << "]" << std::endl;
         } else {
             // Print delineator
